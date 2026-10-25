@@ -232,9 +232,16 @@ export default function ExamCreatePage() {
   const [schoolLoading, setSchoolLoading] = useState(false);
   const [schoolError, setSchoolError] = useState<string | null>(null);
   const [selectedSchool, setSelectedSchool] = useState<string | null>(null);
-  const [selectedSchoolExamId, setSelectedSchoolExamId] = useState<string | null>(null);
-  const [schoolProblems, setSchoolProblems] = useState<ProblemRow[]>([]);
+  // ★ 2026-10-25 (대표 「학교 선택하고 어느 단원·유형을 선택하면 그 학교 전체 기출을」) — 설계서 ❷ 를 학교기출 소스에도.
+  //   시험지 한 장이 아니라 **그 학교의 시험지 여러 장(기본 = 전체 연도)** 이 풀이고, 풀을 단원·유형 칩으로 거른다.
+  //   selectedSchoolExamIds 가 비어 있으면 "전체 연도".
+  const [selectedSchoolExamIds, setSelectedSchoolExamIds] = useState<Set<string>>(new Set());
+  const [schoolProblems, setSchoolProblems] = useState<ProblemRow[]>([]);   // 범위(학교×연도) 풀 — 시험지별 합집합
   const [schoolProblemsLoading, setSchoolProblemsLoading] = useState(false);
+  const schoolPoolCache = React.useRef<Map<string, ProblemRow[]>>(new Map()); // examId → 문제 (한 번 받은 시험지는 재요청 안 함)
+  const [schoolUnitFilter, setSchoolUnitFilter] = useState<string>('');     // 중단원 코드(MS03-06-01) · '' = 전체
+  const [schoolTypeFilter, setSchoolTypeFilter] = useState<string>('');     // 세부유형 코드(접두) · '' = 전체
+  const [schoolTypeNames, setSchoolTypeNames] = useState<Map<string, string>>(new Map()); // 코드 → 이름 (/api/mathsecr/tree)
   const [schoolQuery, setSchoolQuery] = useState('');
 
   // ★ PR-3 (2026-05-28) — 매쓰플랫식 4-필터 풀세트 state
@@ -403,30 +410,99 @@ export default function ExamCreatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // ★ 학교기출 시험지 선택 시 문제 목록 fetch
-  useEffect(() => {
-    if (!selectedSchoolExamId) {
-      setSchoolProblems([]);
-      return;
+  // ★ 학교기출 — 4-필터를 통과한 시험지 (좌측 학교 목록·중간 시험지 목록·풀 범위가 모두 이 하나를 본다)
+  const filteredSchoolExams = useMemo(() => schoolExams.filter((ex) => {
+    // 1) 검색 키워드
+    if (schoolQuery.trim()) {
+      const q = schoolQuery.trim().toLowerCase();
+      const match =
+        (ex.school || '').toLowerCase().includes(q) ||
+        (ex.title || '').toLowerCase().includes(q);
+      if (!match) return false;
     }
+    // 2) 학교급 필터 — grade 의 첫 글자 (중/고/초) 와 매칭
+    if (filterSchoolLevel !== '전체') {
+      const lv = classifySchoolLevel(ex.school || null);
+      if (lv !== filterSchoolLevel) return false;
+    }
+    // 3) 학년·학기 필터 (예: "중2-1") — ex.grade + ex.semester 조합
+    if (filterGradeSemester) {
+      const m = filterGradeSemester.match(/^(초|중|고)?(\d)?(?:-([12]))?$/);
+      if (m) {
+        const lv = m[1];
+        const gr = m[2];
+        const sem = m[3] ? Number(m[3]) : null;
+        if (lv) {
+          const exLv = classifySchoolLevel(ex.school || null);
+          if (exLv !== lv) return false;
+        }
+        if (gr && ex.grade && !String(ex.grade).includes(gr)) return false;
+        if (sem != null && ex.semester != null && ex.semester !== sem) return false;
+      }
+    }
+    // 4) 회차 필터 — exam_round 직접 일치
+    if (filterExamRound && ex.exam_round !== filterExamRound) return false;
+    // 5) 단원 필터 — chapter 부분일치 (다단원 시험지에선 fail 가능)
+    if (filterChapter) {
+      if (!(ex.chapter && ex.chapter.includes(filterChapter))) return false;
+    }
+    // 6) 지역·학교 팝업 다중선택 — selectedSchoolNames 가 있으면 그 학교만
+    if (selectedSchoolNames.size > 0) {
+      const n = ex.school_name || ex.school || '';
+      if (!selectedSchoolNames.has(n)) return false;
+    }
+    return true;
+  }), [schoolExams, schoolQuery, filterSchoolLevel, filterGradeSemester, filterExamRound, filterChapter, selectedSchoolNames]);
+
+  // 풀 범위 = 선택한 학교의 (필터 통과) 시험지 전부, 연도를 골랐으면 그 시험지만
+  const schoolScopeExamIds = useMemo(() => {
+    if (!selectedSchool) return [] as string[];
+    const all = filteredSchoolExams.filter((ex) => (ex.school || '(학교 미상)') === selectedSchool).map((ex) => ex.id);
+    if (selectedSchoolExamIds.size === 0) return all;
+    return all.filter((id) => selectedSchoolExamIds.has(id));
+  }, [filteredSchoolExams, selectedSchool, selectedSchoolExamIds]);
+
+  // ★ 범위의 시험지 문제를 모아 풀을 만든다 — 시험지별로 캐시, 합집합은 id 중복 제거(같은 문제가 두 시험지에 묶인 경우)
+  useEffect(() => {
+    if (schoolScopeExamIds.length === 0) { setSchoolProblems([]); return; }
     let cancelled = false;
+    const missing = schoolScopeExamIds.filter((id) => !schoolPoolCache.current.has(id));
+    const assemble = () => {
+      const seen = new Set<string>();
+      const rows: ProblemRow[] = [];
+      for (const id of schoolScopeExamIds) {
+        for (const p of schoolPoolCache.current.get(id) || []) {
+          if (seen.has(p.id)) continue;
+          seen.add(p.id); rows.push(p);
+        }
+      }
+      return rows;
+    };
+    if (missing.length === 0) { setSchoolProblems(assemble()); return; }
     setSchoolProblemsLoading(true);
     (async () => {
       try {
-        const res = await fetch(`/api/exams/${selectedSchoolExamId}`, { cache: 'no-store' });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        const rows: ProblemRow[] = ((data.problems || []) as Array<Record<string, unknown>>).map((r) => {
-          const p = (r.problems || r) as Record<string, unknown>;
-          return {
-            id: String(p.id || ''),
-            content_latex: String(p.content_latex || ''),
-            source_name: (p.source_name as string) || null,
-            source_year: (p.source_year as number) || null,
-            classifications: (p.classifications as ProblemRow['classifications']) || [],
-          };
-        }).filter((p) => p.id);
-        if (!cancelled) setSchoolProblems(rows);
+        // 4개씩 병렬 — 한 학교 시험지는 많아야 수십 장
+        for (let i = 0; i < missing.length; i += 4) {
+          await Promise.all(missing.slice(i, i + 4).map(async (examId) => {
+            const res = await fetch(`/api/exams/${examId}`, { cache: 'no-store' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            const rows: ProblemRow[] = ((data.problems || []) as Array<Record<string, unknown>>).map((r) => {
+              const p = (r.problems || r) as Record<string, unknown>;
+              return {
+                id: String(p.id || ''),
+                content_latex: String(p.content_latex || ''),
+                source_name: (p.source_name as string) || null,
+                source_year: (p.source_year as number) || null,
+                classifications: (p.classifications as ProblemRow['classifications']) || [],
+              };
+            }).filter((p) => p.id);
+            schoolPoolCache.current.set(examId, rows);
+          }));
+          if (cancelled) return;
+        }
+        if (!cancelled) setSchoolProblems(assemble());
       } catch (e) {
         if (!cancelled) setSchoolError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -434,7 +510,37 @@ export default function ExamCreatePage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedSchoolExamId]);
+  }, [schoolScopeExamIds]);
+
+  // ★ 풀에 나온 과목의 유형 이름 — /api/mathsecr/tree?subject=XX (CDN 캐시, 인증·DB 없음). 코드 = 'MS'+경로 세그먼트 '-' 연결.
+  useEffect(() => {
+    const subjects = Array.from(new Set(schoolProblems.map((p) => {
+      const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
+      return (cls?.type_code || '').match(/^MS(\d{2})/)?.[1] || '';
+    }).filter(Boolean)));
+    const need = subjects.filter((s) => !schoolTypeNames.has(`MS${s}`));
+    if (need.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const next = new Map(schoolTypeNames);
+      for (const s of need) {
+        try {
+          const res = await fetch(`/api/mathsecr/tree?subject=${s}`);
+          const data = await res.json();
+          type Node = { t: string; c: string; ch?: Node[] };
+          const walk = (n: Node, prefix: string) => {
+            const code = prefix ? `${prefix}-${n.c}` : `MS${n.c}`;
+            next.set(code, n.t);
+            (n.ch || []).forEach((ch) => walk(ch, code));
+          };
+          if (data?.tree) walk(data.tree as Node, '');
+          else next.set(`MS${s}`, s);
+        } catch { next.set(`MS${s}`, s); }
+      }
+      if (!cancelled) setSchoolTypeNames(next);
+    })();
+    return () => { cancelled = true; };
+  }, [schoolProblems, schoolTypeNames]);
 
   // ★ 시중교재 — 책 목록 + book_group_id 있는 exams 일괄 fetch
   useEffect(() => {
@@ -980,48 +1086,7 @@ export default function ExamCreatePage() {
         (() => {
           // ★ PR-3 매쓰플랫식 4-필터 적용
           //   각 필터는 빈값/전체면 통과. 선택된 학교들이 있으면 그 학교 exams 만.
-          const filteredExams = schoolExams.filter((ex) => {
-            // 1) 검색 키워드
-            if (schoolQuery.trim()) {
-              const q = schoolQuery.trim().toLowerCase();
-              const match =
-                (ex.school || '').toLowerCase().includes(q) ||
-                (ex.title || '').toLowerCase().includes(q);
-              if (!match) return false;
-            }
-            // 2) 학교급 필터 — grade 의 첫 글자 (중/고/초) 와 매칭
-            if (filterSchoolLevel !== '전체') {
-              const lv = classifySchoolLevel(ex.school || null);
-              if (lv !== filterSchoolLevel) return false;
-            }
-            // 3) 학년·학기 필터 (예: "중2-1") — ex.grade + ex.semester 조합
-            if (filterGradeSemester) {
-              const m = filterGradeSemester.match(/^(초|중|고)?(\d)?(?:-([12]))?$/);
-              if (m) {
-                const lv = m[1];
-                const gr = m[2];
-                const sem = m[3] ? Number(m[3]) : null;
-                if (lv) {
-                  const exLv = classifySchoolLevel(ex.school || null);
-                  if (exLv !== lv) return false;
-                }
-                if (gr && ex.grade && !String(ex.grade).includes(gr)) return false;
-                if (sem != null && ex.semester != null && ex.semester !== sem) return false;
-              }
-            }
-            // 4) 회차 필터 — exam_round 직접 일치
-            if (filterExamRound && ex.exam_round !== filterExamRound) return false;
-            // 5) 단원 필터 — chapter 부분일치 (다단원 시험지에선 fail 가능)
-            if (filterChapter) {
-              if (!(ex.chapter && ex.chapter.includes(filterChapter))) return false;
-            }
-            // 6) 지역·학교 팝업 다중선택 — selectedSchoolNames 가 있으면 그 학교만
-            if (selectedSchoolNames.size > 0) {
-              const n = ex.school_name || ex.school || '';
-              if (!selectedSchoolNames.has(n)) return false;
-            }
-            return true;
-          });
+          const filteredExams = filteredSchoolExams; // 필터 로직은 컴포넌트 상단 useMemo (풀 범위 effect 와 공유)
           const bySchool = new Map<string, SchoolExam[]>();
           for (const ex of filteredExams) {
             const key = ex.school || '(학교 미상)';
@@ -1041,6 +1106,28 @@ export default function ExamCreatePage() {
           const GRADE_SEM_OPTIONS = ['', '중1-1', '중1-2', '중2-1', '중2-2', '중3-1', '중3-2', '고1', '고2', '고3'];
           const EXAM_ROUND_OPTIONS = ['', '중간', '기말', '단원집', '수행평가'];
           const chapterOptions = Array.from(new Set(schoolExams.map((e) => e.chapter).filter((c): c is string => !!c))).sort();
+          // ★ 풀을 단원(중단원)·유형으로 거르기 — 칩에 문항 수를 붙여 "이 학교 기출이 어느 단원에 몇 개" 가 바로 보이게
+          const codeOf = (p: ProblemRow) => {
+            const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
+            return cls?.type_code || '';
+          };
+          const unitOf = (code: string) => code.split('-').slice(0, 3).join('-');          // MS03-06-01 (중단원)
+          const nameOf = (code: string) => schoolTypeNames.get(code) || code;
+          const unitCounts = new Map<string, number>();
+          let unclassified = 0;
+          for (const p of schoolProblems) {
+            const c = codeOf(p);
+            if (!c) { unclassified++; continue; }
+            const u = unitOf(c); unitCounts.set(u, (unitCounts.get(u) || 0) + 1);
+          }
+          const unitChips = Array.from(unitCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+          const inUnit = schoolUnitFilter ? schoolProblems.filter((p) => unitOf(codeOf(p)) === schoolUnitFilter) : schoolProblems;
+          // 선택한 중단원 안의 소단원(4세그먼트) 칩
+          const typeCounts = new Map<string, number>();
+          if (schoolUnitFilter) for (const p of inUnit) { const c = codeOf(p); const t = c.split('-').slice(0, 4).join('-'); typeCounts.set(t, (typeCounts.get(t) || 0) + 1); }
+          const typeChips = Array.from(typeCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+          const visibleSchoolProblems = schoolTypeFilter ? inUnit.filter((p) => codeOf(p).startsWith(schoolTypeFilter)) : inUnit;
+          const scopeCount = schoolScopeExamIds.length;
           return (
             <div className="flex flex-1 flex-col overflow-hidden">
               {/* ★ 상단: 매쓰플랫식 4-필터 바 */}
@@ -1166,7 +1253,9 @@ export default function ExamCreatePage() {
                             type="button"
                             onClick={() => {
                               setSelectedSchool(sch);
-                              setSelectedSchoolExamId(null);
+                              setSelectedSchoolExamIds(new Set()); // 학교 바꾸면 전체 연도부터
+                              setSchoolUnitFilter('');
+                              setSchoolTypeFilter('');
                             }}
                             className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                               isSelected
@@ -1197,15 +1286,30 @@ export default function ExamCreatePage() {
                   <div className="text-xs text-zinc-500 py-4 text-center">학교를 선택하세요</div>
                 ) : (
                   <>
-                    <h4 className="mb-2 text-xs font-bold text-content-secondary">{selectedSchool} 시험지</h4>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h4 className="text-xs font-bold text-content-secondary">{selectedSchool} 시험지 <span className="text-zinc-500 font-normal">{examsForSelected.length}장</span></h4>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSchoolExamIds(new Set())}
+                        className={`rounded-full border px-2 py-0.5 text-[10px] ${selectedSchoolExamIds.size === 0 ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}
+                      >
+                        전체 연도
+                      </button>
+                    </div>
+                    <p className="mb-2 text-[10px] text-zinc-500">연도를 고르면 그 시험지만, 안 고르면 전체가 풀입니다. 여러 장 선택 가능.</p>
                     <ul className="space-y-1.5">
                       {examsForSelected.map((ex) => {
-                        const isSelected = selectedSchoolExamId === ex.id;
+                        const isSelected = selectedSchoolExamIds.size === 0 || selectedSchoolExamIds.has(ex.id);
                         return (
                           <li key={ex.id}>
                             <button
                               type="button"
-                              onClick={() => setSelectedSchoolExamId(ex.id)}
+                              onClick={() => setSelectedSchoolExamIds((prev) => {
+                                const next = new Set(prev);
+                                if (prev.size === 0) { next.add(ex.id); return next; }      // 전체 → 이 장만
+                                if (next.has(ex.id)) next.delete(ex.id); else next.add(ex.id);
+                                return next;                                                 // 전부 해제되면 size 0 = 전체
+                              })}
                               className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
                                 isSelected
                                   ? 'border-white/[.14] bg-white/[.08]'
@@ -1234,43 +1338,76 @@ export default function ExamCreatePage() {
 
               {/* 우측: 시험지 문제 grid */}
               <main className="flex-1 overflow-y-auto p-6">
-                {!selectedSchoolExamId ? (
+                {!selectedSchool ? (
                   <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
                     <School className="mb-3 h-10 w-10 text-zinc-700" />
-                    <p className="text-sm">
-                      {selectedSchool
-                        ? '중간 패널에서 시험지를 선택하세요.'
-                        : '좌측에서 학교를 먼저 선택하세요.'}
-                    </p>
+                    <p className="text-sm">좌측에서 학교를 먼저 선택하세요.</p>
                   </div>
                 ) : schoolProblemsLoading ? (
                   <div className="flex items-center justify-center py-20 text-zinc-500">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 문제 불러오는 중…
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {scopeCount}장의 문제 불러오는 중…
                   </div>
                 ) : schoolProblems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
                     <Layers className="mb-3 h-10 w-10 text-zinc-700" />
-                    <p className="text-sm">이 시험지에 문제가 없습니다.</p>
+                    <p className="text-sm">선택한 범위에 문제가 없습니다.</p>
                   </div>
                 ) : (
                   <>
+                    {/* ★ 단원 칩 — 이 학교 풀이 어느 중단원에 몇 문항인지. 고르면 아래 소단원 칩이 열린다. */}
+                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                      <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">단원</span>
+                      <button type="button" onClick={() => { setSchoolUnitFilter(''); setSchoolTypeFilter(''); }}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] ${!schoolUnitFilter ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
+                        전체 <span className="tabular-nums text-zinc-500">{schoolProblems.length}</span>
+                      </button>
+                      {unitChips.map(([u, n]) => (
+                        <button key={u} type="button" onClick={() => { setSchoolUnitFilter(u === schoolUnitFilter ? '' : u); setSchoolTypeFilter(''); }}
+                          title={u}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] ${schoolUnitFilter === u ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
+                          {nameOf(u)} <span className="tabular-nums text-zinc-500">{n}</span>
+                        </button>
+                      ))}
+                      {unclassified > 0 && (
+                        <span className="rounded-full border border-dashed border-zinc-700 px-2.5 py-1 text-[11px] text-zinc-500" title="유형 분류가 아직 없는 문항 — 전체에만 포함">
+                          미분류 <span className="tabular-nums">{unclassified}</span>
+                        </span>
+                      )}
+                    </div>
+                    {schoolUnitFilter && typeChips.length > 1 && (
+                      <div className="mb-3 flex flex-wrap items-center gap-1.5 pl-1">
+                        <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">유형</span>
+                        <button type="button" onClick={() => setSchoolTypeFilter('')}
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${!schoolTypeFilter ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
+                          전체 <span className="tabular-nums text-zinc-500">{inUnit.length}</span>
+                        </button>
+                        {typeChips.map(([t, n]) => (
+                          <button key={t} type="button" onClick={() => setSchoolTypeFilter(t === schoolTypeFilter ? '' : t)} title={t}
+                            className={`rounded-full border px-2 py-0.5 text-[10px] ${schoolTypeFilter === t ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
+                            {nameOf(t)} <span className="tabular-nums text-zinc-500">{n}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <div className="mb-3 flex items-center justify-between">
                       <div className="text-xs text-zinc-400">
-                        문제 <span className="font-bold text-content-primary tabular-nums">{schoolProblems.length}</span>건
-                        <span className="ml-2 text-zinc-500">— 골라서 새 시험지에 편성</span>
+                        문제 <span className="font-bold text-content-primary tabular-nums">{visibleSchoolProblems.length}</span>건
+                        <span className="ml-2 text-zinc-500">
+                          — {selectedSchool} 시험지 {scopeCount}장{schoolUnitFilter ? ` · ${nameOf(schoolTypeFilter || schoolUnitFilter)}` : ''} · 골라서 새 시험지에 편성
+                        </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => {
-                          toggleAll(schoolProblems);
+                          toggleAll(visibleSchoolProblems);
                         }}
                         className="text-xs text-content-secondary hover:text-content-primary underline"
                       >
-                        전체 선택/해제
+                        전체 선택/해제 ({visibleSchoolProblems.length})
                       </button>
                     </div>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                      {schoolProblems.map((p) => {
+                      {visibleSchoolProblems.map((p) => {
                         const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
                         const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
                         const code = cls?.type_code || '';
