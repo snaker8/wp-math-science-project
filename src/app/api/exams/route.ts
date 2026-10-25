@@ -344,6 +344,14 @@ export async function GET(request: NextRequest) {
         examType: exam.exam_type ?? (exam.is_diagnostic ? null : '학교기출'),
         grade: exam.grade || '고1',
         createdAt: exam.created_at,
+        // ★ 2026-10-25 — 학교기출 메타를 그대로 내려보낸다. 지금까지 select 만 하고 응답에서 빠뜨려,
+        //   출제 화면의 학년·학기/회차/단원 필터가 **한 번도 동작한 적이 없었다**(중2-2 를 골라도 2-1 이 뜸).
+        school_name: exam.school_name ?? null,
+        district: exam.district ?? null,
+        semester: exam.semester ?? null,
+        exam_year: exam.exam_year ?? null,
+        exam_round: exam.exam_round ?? null,
+        chapter: exam.chapter ?? null,
         // ★ 진단지 메타 — 학원자료 페이지·진단 분석에서 사용
         isDiagnostic: !!exam.is_diagnostic,
         diagnosticCategory: exam.diagnostic_category || null,

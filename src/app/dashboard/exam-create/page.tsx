@@ -40,6 +40,13 @@ import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { truncateLatexPreview } from '@/lib/utils/latex-preview';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
+import { parseExamTitleMeta } from '@/lib/workflow/exam-title-meta';
+
+// ★ 카드 미리보기 — [도형]·[도형:line:35%] 마커는 그림 자리표시라 글자로 보이면 안 된다 (2026-10-25 부흥중 카드).
+//   그림 자체는 편성·인쇄 화면에서 렌더된다. 여기선 걷어내고 "그림" 표시만.
+function previewLatex(s: string): string {
+  return truncateLatexPreview((s || '').replace(/\[도형(?::[^\]]*)?\]/g, ' ').replace(/[ \t]{2,}/g, ' ').trim(), 200);
+}
 import { SelectionTray, type PickedProblem } from '@/components/exam-create/SelectionTray';
 import { WeakClinicPanel, type WeakProblemRow } from '@/components/exam-create/WeakClinicPanel';
 import { WrongSourcePanel, type WrongSourceRow } from '@/components/exam-create/WrongSourcePanel';
@@ -368,11 +375,20 @@ export default function ExamCreatePage() {
         const res = await fetch('/api/exams?is_diagnostic=false&limit=3000', { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        const rows = ((data.exams || []) as SchoolExam[]).map((ex) => ({
-          ...ex,
-          // ★ PR-1 새 컬럼이 있으면 우선, 없으면 title 정규식 추출 fallback
-          school: ex.school_name || extractSchoolName(ex.title),
-        }));
+        const rows = ((data.exams || []) as SchoolExam[]).map((ex) => {
+          // ★ 학기·회차가 비어 있는 시험지(예: `26-2-2-M 부흥중`, 자산화 때 메타 미기록)는 제목 규격에서 보정 —
+          //   안 하면 학기 필터가 "모름 = 통과" 로 처리해 2-2 를 골라도 섞여 나온다 (2026-10-25).
+          const meta = parseExamTitleMeta(ex.title || '');
+          return {
+            ...ex,
+            // ★ PR-1 새 컬럼이 있으면 우선, 없으면 title 정규식 추출 fallback
+            school: ex.school_name || extractSchoolName(ex.title),
+            semester: ex.semester ?? meta?.semester ?? null,
+            exam_round: ex.exam_round ?? meta?.examRound ?? null,
+            exam_year: ex.exam_year ?? meta?.examYear ?? null,
+            grade: ex.grade || meta?.grade || ex.grade,
+          };
+        });
         if (!cancelled) setSchoolExams(rows);
       } catch (e) {
         if (!cancelled) setSchoolError(e instanceof Error ? e.message : String(e));
@@ -1071,7 +1087,7 @@ export default function ExamCreatePage() {
                           </div>
                         </div>
                         <div className="line-clamp-3 text-xs text-zinc-300">
-                          <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
+                          <MixedContentRenderer content={previewLatex(p.content_latex)} />
                         </div>
                       </button>
                     );
@@ -1441,7 +1457,7 @@ export default function ExamCreatePage() {
                               </div>
                             </div>
                             <div className="line-clamp-3 text-xs text-zinc-300">
-                              <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
+                              <MixedContentRenderer content={previewLatex(p.content_latex)} />
                             </div>
                           </button>
                         );
@@ -1659,7 +1675,7 @@ export default function ExamCreatePage() {
                               </div>
                             </div>
                             <div className="line-clamp-3 text-xs text-zinc-300">
-                              <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
+                              <MixedContentRenderer content={previewLatex(p.content_latex)} />
                             </div>
                           </button>
                         );
@@ -1874,7 +1890,7 @@ export default function ExamCreatePage() {
                               </div>
                             </div>
                             <div className="line-clamp-3 text-xs text-zinc-300">
-                              <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
+                              <MixedContentRenderer content={previewLatex(p.content_latex)} />
                             </div>
                           </button>
                         );
@@ -2157,7 +2173,7 @@ export default function ExamCreatePage() {
                         </div>
                       </div>
                       <div className="line-clamp-3 text-xs text-zinc-300">
-                        <MixedContentRenderer content={truncateLatexPreview(p.content_latex, 200)} />
+                        <MixedContentRenderer content={previewLatex(p.content_latex)} />
                       </div>
                       {p.source_name && (
                         <div className="mt-2 truncate text-[10px] text-zinc-500">
