@@ -10,6 +10,7 @@ import { requireAuthScope } from '@/lib/auth/guard';
 import { resolveInsertInstituteId, applyInstituteFilter } from '@/lib/security/institute-guard';
 import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
 import { capPerType, pickByBand, pickRandom, pickEvenByUnit, orderForPaper, parsePerTypeCap, parseSelectionMode } from '@/lib/exam/selection';
+import { parseSourceScope, loadSourceProblemIds } from '@/lib/exam/source-scope';
 
 export async function POST(request: NextRequest) {
   const authed = await requireAuthScope();
@@ -86,6 +87,8 @@ export async function POST(request: NextRequest) {
       if (typeof k === 'string' && /^MS\d{2}/.test(k) && Number.isFinite(n) && n > 0) typeCounts[k] = Math.min(50, Math.floor(n));
     }
     const answerType: string = criteria?.answerType || '';   // '' 전체 · multiple_choice · short_answer
+    // ★ 출처 범위 — 전체 / 학교기출(특정 학교) / 시중교재 / 모의고사 / 진단평가. available-counts 와 같은 함수 → 같은 집합 (2026-10-25)
+    const sourceScope = parseSourceScope({ source: criteria?.source, schools: criteria?.schools });
     // ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항 제외 (0 = 끄기, 기본 30일). 매쓰홀릭 「중복출제 방지」 와 같은 뜻.
     const excludeRecentDays = parseExcludeRecentDays(criteria?.excludeRecentDays);
     // ★ 출제 방식(2026-10-14, 매쓰홀릭 등가): band=난이도별 맞춤(밴드 칸) · random=무작위(밴드 골고루) · even=소단원별 균등
@@ -182,6 +185,10 @@ export async function POST(request: NextRequest) {
     }
 
     for (const id of excludeProblemIds) accessibleSet.delete(id);
+
+    // 출처 범위 밖 문제 제거 (메모리 교집합)
+    const sourceIds = await loadSourceProblemIds(supabaseAdmin, sourceScope);
+    if (sourceIds) for (const id of Array.from(accessibleSet)) if (!sourceIds.has(id)) accessibleSet.delete(id);
 
     const classRows = allClassRows.filter(r => accessibleSet.has(r.problem_id));
     if (classRows.length === 0) {

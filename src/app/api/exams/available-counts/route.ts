@@ -14,6 +14,7 @@ import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
 import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
 import { capPerType, deterministicRng, parsePerTypeCap, type PoolRow } from '@/lib/exam/selection';
+import { parseSourceScope, loadSourceProblemIds, type SourceScope } from '@/lib/exam/source-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,15 +27,18 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const typeCodes = (searchParams.get('typeCodes') || '').split(',').filter(Boolean);
   const answerType = searchParams.get('answerType') || '';
-  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(searchParams.get('excludeRecentDays')), parsePerTypeCap(searchParams.get('perTypeCap')));
+  const sourceScope = parseSourceScope({ source: searchParams.get('source'), schools: searchParams.get('schools') });
+  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(searchParams.get('excludeRecentDays')), parsePerTypeCap(searchParams.get('perTypeCap')), sourceScope);
 }
 
 export async function POST(request: NextRequest) {
-  let body: { typeCodes?: unknown; answerType?: unknown; excludeRecentDays?: unknown; perTypeCap?: unknown } = {};
+  let body: { typeCodes?: unknown; answerType?: unknown; excludeRecentDays?: unknown; perTypeCap?: unknown; source?: unknown; schools?: unknown } = {};
   try { body = await request.json(); } catch { /* 빈 본문 */ }
   const typeCodes = Array.isArray(body.typeCodes) ? (body.typeCodes as unknown[]).filter((c): c is string => typeof c === 'string' && /^MS\d{2}/.test(c)) : [];
   const answerType = typeof body.answerType === 'string' ? body.answerType : '';
-  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(body.excludeRecentDays), parsePerTypeCap(body.perTypeCap));
+  // ★ 출처 범위(전체/학교기출→특정 학교/시중교재/모의고사) — generate 와 같은 함수로 같은 집합 (2026-10-25)
+  const sourceScope = parseSourceScope({ source: body.source, schools: body.schools });
+  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(body.excludeRecentDays), parsePerTypeCap(body.perTypeCap), sourceScope);
 }
 
 // ★ .or() 필터는 한 번에 150개씩 — PostgREST 도 GET 이라 like 절 수백 개는 URL 한도를 넘는다
@@ -42,7 +46,7 @@ const OR_CHUNK = 150;
 
 // ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항은 「있는 문제 수」에서도 뺀다 (generate 와 같은 집합).
 // ★ 유형별 상한(perTypeCap) 도 같은 규칙으로 걸어 「선택 N」(= 상한 적용 후 후보 수) 을 돌려준다.
-async function countAvailable(typeCodes: string[], answerType: string, excludeRecentDays: number, perTypeCap: number) {
+async function countAvailable(typeCodes: string[], answerType: string, excludeRecentDays: number, perTypeCap: number, sourceScope: SourceScope) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
   const { scope } = authed.data;
@@ -81,8 +85,13 @@ async function countAvailable(typeCodes: string[], answerType: string, excludeRe
     }
     if (rows.length === 0) return NextResponse.json({ ...EMPTY, excludedRecent: 0, selected: 0 });
 
+    // 1.5) 출처 범위 — 범위 밖 문제는 후보에서 뺀다 (메모리 교집합, 집합이 수만 개라 .in() 에 안 싣는다)
+    const sourceIds = await loadSourceProblemIds(sb, sourceScope);
+    const scopedRows = sourceIds ? rows.filter((r) => sourceIds.has(r.problem_id)) : rows;
+    if (scopedRows.length === 0) return NextResponse.json({ ...EMPTY, excludedRecent: 0, selected: 0 });
+
     // 2) 접근 가능(자기 institute + 공통 풀) 문제만 — chunk .in() + institute 필터
-    const candidateIds = [...new Set(rows.map(r => r.problem_id))];
+    const candidateIds = [...new Set(scopedRows.map(r => r.problem_id))];
     const accessible = new Set<string>();
     const ID_CHUNK = 300;
     for (let i = 0; i < candidateIds.length; i += ID_CHUNK) {
@@ -108,7 +117,7 @@ async function countAvailable(typeCodes: string[], answerType: string, excludeRe
     }
 
     // 3) 접근 가능 문제만 → 유형별 상한(표시용 결정적 순서) → 난이도별 카운트. selected = 상한 적용 후 후보 수
-    const pool = capPerType(rows.filter((r) => accessible.has(r.problem_id)), perTypeCap, deterministicRng);
+    const pool = capPerType(scopedRows.filter((r) => accessible.has(r.problem_id)), perTypeCap, deterministicRng);
     const counts: Record<string, number> = { ...EMPTY };
     for (const row of pool) {
       const label = bandLabelOf(row.difficulty as number | string | null);
