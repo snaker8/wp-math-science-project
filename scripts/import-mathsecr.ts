@@ -340,7 +340,15 @@ async function main() {
   ) as Record<string, string>;
   const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-  let items = walk(ROOT).map((file) => ({ file, cls: classify(path.basename(file)) }));
+  let items = walk(ROOT).map((file) => {
+    const cls = classify(path.basename(file));
+    // ★ 모의고사 규격은 미러의 평가원·교육청 폴더 안에 있는 원본만. 다른 폴더의 `1318097_2016년 교육청 고2이과 3월.hml`
+    //   같은 발췌본(8~9문항)이 먼저 걸리면 같은 제목으로 원본(30문항)을 막는다(2026-10-25 첫 적재 실측) → 종전처럼 편집본.
+    if (cls.kind === 'mock' && !/[\\/](평가원|교육청)[\\/]/.test(file)) {
+      return { file, cls: { kind: 'made', name: stripDbSuffix(path.basename(file).replace(/\.hml$/i, '')).replace(/^\d+_/, '').trim() } as Classified };
+    }
+    return { file, cls };
+  });
   if (ONLY_KIND) items = items.filter((x) => x.cls.kind === ONLY_KIND);
   if (ONLY_SCHOOL) items = items.filter((x) => x.cls.kind === 'school' && x.cls.school === ONLY_SCHOOL);
   if (ONLY_FOLDER) items = items.filter((x) => x.file.includes(ONLY_FOLDER));
@@ -414,7 +422,14 @@ async function main() {
       done++; continue;
     }
 
-    const bookGroupId = await ensureFolder(sb, folders);
+    // ★ 네트워크 일시 오류(TypeError: fetch failed, 2026-10-25 실측 37회) — 폴더를 못 만들면 시험지를 만들지 않는다
+    //   (null 로 넘기면 createExamFromHml 이 과목코드로 엉뚱한 폴더를 고른다). 3회 재시도 후 실패로 기록.
+    let bookGroupId: string | null = null;
+    for (let attempt = 0; attempt < 3 && !bookGroupId; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 2000 * attempt));
+      bookGroupId = await ensureFolder(sb, folders);
+    }
+    if (!bookGroupId) { failed++; report.push(`적재실패  ${title} — 폴더 생성 실패(네트워크) → 재실행 대상`); continue; }
     for (const pc of pieces) {
       const res = await createExamFromHml(sb, pc.parsed, {
         createdBy: CREATED_BY,
@@ -432,6 +447,16 @@ async function main() {
       if (res.alreadyExisted) {
         skipped++;
         report.push(`중복건너뜀 ${pc.title} — 이미 있음: "${res.duplicateOf?.title ?? '(제목 동일)'}"`);
+        continue;
+      }
+      // ★ 문항 일부만 들어간 시험지(문항 INSERT 중 fetch failed)는 남기면 안 된다 — 제목 중복 가드가 재실행을 막아
+      //   영원히 반쪽으로 남는다. 시험지·문항을 소프트삭제하고 실패로 기록해 재실행에서 다시 넣는다.
+      if ((res.savedProblems ?? 0) < pc.parsed.problems.length && res.examId) {
+        const { data: links } = await sb.from('exam_problems').select('problem_id').eq('exam_id', res.examId);
+        const ids = (links || []).map((l) => l.problem_id as string);
+        if (ids.length) await sb.from('problems').update({ deleted_at: new Date().toISOString() }).in('id', ids);
+        await sb.from('exams').update({ deleted_at: new Date().toISOString() }).eq('id', res.examId);
+        failed++; report.push(`적재실패  ${pc.title} — 문항 ${res.savedProblems ?? 0}/${pc.parsed.problems.length} 만 저장돼 되돌림(네트워크) → 재실행 대상`);
         continue;
       }
       problems += res.savedProblems ?? 0;
