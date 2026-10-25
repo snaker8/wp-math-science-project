@@ -253,8 +253,10 @@ export default function ExamCreatePage() {
   const [schoolProblems, setSchoolProblems] = useState<ProblemRow[]>([]);   // 범위(학교×연도) 풀 — 시험지별 합집합
   const [schoolProblemsLoading, setSchoolProblemsLoading] = useState(false);
   const schoolPoolCache = React.useRef<Map<string, ProblemRow[]>>(new Map()); // examId → 문제 (한 번 받은 시험지는 재요청 안 함)
-  const [schoolUnitFilter, setSchoolUnitFilter] = useState<string>('');     // 중단원 코드(MS03-06-01) · '' = 전체
-  const [schoolTypeFilter, setSchoolTypeFilter] = useState<string>('');     // 세부유형 코드(접두) · '' = 전체
+  // ★ 단원·유형 복수 선택 (2026-10-25 대표) — 빈 집합 = 전체. 학교는 ALL_SCHOOLS 센티널이면 목록의 모든 학교가 풀.
+  const [schoolUnitFilters, setSchoolUnitFilters] = useState<Set<string>>(new Set());   // 중단원 코드(MS03-06-01)
+  const [schoolTypeFilters, setSchoolTypeFilters] = useState<Set<string>>(new Set());   // 소단원 코드(4세그먼트)
+  const ALL_SCHOOLS = '__ALL__';
   const [schoolTypeNames, setSchoolTypeNames] = useState<Map<string, string>>(new Map()); // 코드 → 이름 (/api/mathsecr/tree)
   const [schoolQuery, setSchoolQuery] = useState('');
 
@@ -480,7 +482,7 @@ export default function ExamCreatePage() {
   // 풀 범위 = 선택한 학교의 (필터 통과) 시험지 전부, 연도를 골랐으면 그 시험지만
   const schoolScopeExamIds = useMemo(() => {
     if (!selectedSchool) return [] as string[];
-    const all = filteredSchoolExams.filter((ex) => (ex.school || '(학교 미상)') === selectedSchool).map((ex) => ex.id);
+    const all = (selectedSchool === ALL_SCHOOLS ? filteredSchoolExams : filteredSchoolExams.filter((ex) => (ex.school || '(학교 미상)') === selectedSchool)).map((ex) => ex.id);
     if (selectedSchoolExamIds.size === 0) return all;
     return all.filter((id) => selectedSchoolExamIds.has(id));
   }, [filteredSchoolExams, selectedSchool, selectedSchoolExamIds]);
@@ -1124,7 +1126,10 @@ export default function ExamCreatePage() {
             if (order[la] !== order[lb]) return order[la] - order[lb];
             return a.localeCompare(b, 'ko');
           });
-          const examsForSelected = selectedSchool ? bySchool.get(selectedSchool) || [] : [];
+          const examsForSelected = !selectedSchool ? [] : selectedSchool === ALL_SCHOOLS ? filteredExams : bySchool.get(selectedSchool) || [];
+          const schoolLabel = selectedSchool === ALL_SCHOOLS ? `전체 학교 ${sortedSchools.length}개교` : selectedSchool;
+          // 카드 배지 — M=중간·F=기말 (대표: "m 은 중간 f 기말이다"). exam_round 가 비면 제목 규격에서
+          const roundOf = (ex: SchoolExam) => ex.exam_round || ({ M: '중간', F: '기말' } as Record<string, string>)[(ex.title.match(/^\d\d-\d-\d-([MF])\b/) || [])[1] || ''] || '';
           // ★ PR-3 4-필터 옵션
           const GRADE_SEM_OPTIONS = ['', '중1-1', '중1-2', '중2-1', '중2-2', '중3-1', '중3-2', '고1', '고2', '고3'];
           const EXAM_ROUND_OPTIONS = ['', '중간', '기말', '단원집', '수행평가'];
@@ -1144,12 +1149,13 @@ export default function ExamCreatePage() {
             const u = unitOf(c); unitCounts.set(u, (unitCounts.get(u) || 0) + 1);
           }
           const unitChips = Array.from(unitCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-          const inUnit = schoolUnitFilter ? schoolProblems.filter((p) => unitOf(codeOf(p)) === schoolUnitFilter) : schoolProblems;
-          // 선택한 중단원 안의 소단원(4세그먼트) 칩
+          const inUnit = schoolUnitFilters.size ? schoolProblems.filter((p) => schoolUnitFilters.has(unitOf(codeOf(p)))) : schoolProblems;
+          // 선택한 중단원(들) 안의 소단원(4세그먼트) 칩
           const typeCounts = new Map<string, number>();
-          if (schoolUnitFilter) for (const p of inUnit) { const c = codeOf(p); const t = c.split('-').slice(0, 4).join('-'); typeCounts.set(t, (typeCounts.get(t) || 0) + 1); }
+          if (schoolUnitFilters.size) for (const p of inUnit) { const c = codeOf(p); const t = c.split('-').slice(0, 4).join('-'); typeCounts.set(t, (typeCounts.get(t) || 0) + 1); }
           const typeChips = Array.from(typeCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-          const visibleSchoolProblems = schoolTypeFilter ? inUnit.filter((p) => codeOf(p).startsWith(schoolTypeFilter)) : inUnit;
+          const visibleSchoolProblems = schoolTypeFilters.size ? inUnit.filter((p) => { const c = codeOf(p); return Array.from(schoolTypeFilters).some((t) => c.startsWith(t)); }) : inUnit;
+          const toggleIn = (set: Set<string>, v: string) => { const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); return n; };
           const scopeCount = schoolScopeExamIds.length;
           return (
             <div className="flex flex-1 flex-col overflow-hidden">
@@ -1266,6 +1272,19 @@ export default function ExamCreatePage() {
                   <div className="text-xs text-zinc-500 py-4">검색 결과가 없습니다.</div>
                 ) : (
                   <ul className="space-y-1">
+                    {/* ★ 전체 학교 — 필터(학교급·학년학기·회차·지역)를 통과한 모든 학교의 시험지가 한 풀 (대표 「학교도 전체 선택 가능하게」) */}
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedSchool(ALL_SCHOOLS); setSelectedSchoolExamIds(new Set()); setSchoolUnitFilters(new Set()); setSchoolTypeFilters(new Set()); }}
+                        className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
+                          selectedSchool === ALL_SCHOOLS ? 'bg-white/[.08] text-content-primary' : 'text-zinc-300 hover:bg-white/5'
+                        }`}
+                      >
+                        <span className="font-semibold">전체 학교</span>
+                        <span className="text-[10px] text-zinc-500 flex-shrink-0">{sortedSchools.length}개교 · {filteredExams.length}장</span>
+                      </button>
+                    </li>
                     {sortedSchools.map((sch) => {
                       const count = bySchool.get(sch)!.length;
                       const level = classifySchoolLevel(sch === '(학교 미상)' ? null : sch);
@@ -1277,8 +1296,8 @@ export default function ExamCreatePage() {
                             onClick={() => {
                               setSelectedSchool(sch);
                               setSelectedSchoolExamIds(new Set()); // 학교 바꾸면 전체 연도부터
-                              setSchoolUnitFilter('');
-                              setSchoolTypeFilter('');
+                              setSchoolUnitFilters(new Set());
+                              setSchoolTypeFilters(new Set());
                             }}
                             className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                               isSelected
@@ -1310,7 +1329,7 @@ export default function ExamCreatePage() {
                 ) : (
                   <>
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <h4 className="text-xs font-bold text-content-secondary">{selectedSchool} 시험지 <span className="text-zinc-500 font-normal">{examsForSelected.length}장</span></h4>
+                      <h4 className="text-xs font-bold text-content-secondary">{schoolLabel} 시험지 <span className="text-zinc-500 font-normal">{examsForSelected.length}장</span></h4>
                       <button
                         type="button"
                         onClick={() => setSelectedSchoolExamIds(new Set())}
@@ -1319,19 +1338,20 @@ export default function ExamCreatePage() {
                         전체 연도
                       </button>
                     </div>
-                    <p className="mb-2 text-[10px] text-zinc-500">연도를 고르면 그 시험지만, 안 고르면 전체가 풀입니다. 여러 장 선택 가능.</p>
+                    <p className="mb-2 text-[10px] text-zinc-500">아무 것도 안 고르면 전체 연도가 풀입니다. 카드를 누르면 그 시험지만(여러 장 가능), 다시 누르면 뺍니다.</p>
                     <ul className="space-y-1.5">
                       {examsForSelected.map((ex) => {
-                        const isSelected = selectedSchoolExamIds.size === 0 || selectedSchoolExamIds.has(ex.id);
+                        // ★ 전체 연도 상태에선 카드를 하이라이트하지 않는다 — 전부 켜져 보여 "맨 위를 누르면 다 눌린다"로 읽혔다 (대표)
+                        const isSelected = selectedSchoolExamIds.has(ex.id);
+                        const round = roundOf(ex);
                         return (
                           <li key={ex.id}>
                             <button
                               type="button"
                               onClick={() => setSelectedSchoolExamIds((prev) => {
                                 const next = new Set(prev);
-                                if (prev.size === 0) { next.add(ex.id); return next; }      // 전체 → 이 장만
                                 if (next.has(ex.id)) next.delete(ex.id); else next.add(ex.id);
-                                return next;                                                 // 전부 해제되면 size 0 = 전체
+                                return next;                                                 // 전부 해제되면 size 0 = 전체 연도
                               })}
                               className={`w-full text-left rounded-lg border px-3 py-2 transition-all ${
                                 isSelected
@@ -1345,9 +1365,13 @@ export default function ExamCreatePage() {
                                     {ex.grade}
                                   </span>
                                 )}
-                                {ex.exam_type && (
-                                  <span className="text-[10px] text-zinc-500">{ex.exam_type}</span>
+                                {round && (
+                                  <span className={`text-[10px] px-1 py-0.5 rounded border ${round === '중간' ? 'border-sky-400/30 text-sky-300' : round === '기말' ? 'border-amber-400/30 text-amber-300' : 'border-white/[.08] text-content-secondary'}`}>
+                                    {round}
+                                  </span>
                                 )}
+                                {ex.exam_year && <span className="text-[10px] text-zinc-500">{ex.exam_year}년{ex.semester ? ` ${ex.semester}학기` : ''}</span>}
+                                {selectedSchool === ALL_SCHOOLS && <span className="ml-auto text-[10px] text-zinc-500 truncate">{ex.school}</span>}
                               </div>
                               <div className="text-xs font-semibold text-content-primary truncate">{ex.title}</div>
                             </button>
@@ -1380,15 +1404,15 @@ export default function ExamCreatePage() {
                     {/* ★ 단원 칩 — 이 학교 풀이 어느 중단원에 몇 문항인지. 고르면 아래 소단원 칩이 열린다. */}
                     <div className="mb-2 flex flex-wrap items-center gap-1.5">
                       <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">단원</span>
-                      <button type="button" onClick={() => { setSchoolUnitFilter(''); setSchoolTypeFilter(''); }}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] ${!schoolUnitFilter ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
+                      <button type="button" onClick={() => { setSchoolUnitFilters(new Set()); setSchoolTypeFilters(new Set()); }}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] ${schoolUnitFilters.size === 0 ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
                         전체 <span className="tabular-nums text-zinc-500">{schoolProblems.length}</span>
                       </button>
                       {unitChips.map(([u, n]) => (
-                        <button key={u} type="button" onClick={() => { setSchoolUnitFilter(u === schoolUnitFilter ? '' : u); setSchoolTypeFilter(''); }}
-                          title={u}
-                          className={`rounded-full border px-2.5 py-1 text-[11px] ${schoolUnitFilter === u ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
-                          {nameOf(u)} <span className="tabular-nums text-zinc-500">{n}</span>
+                        <button key={u} type="button" onClick={() => { setSchoolUnitFilters((s) => toggleIn(s, u)); setSchoolTypeFilters(new Set()); }}
+                          title={`${u} — 여러 단원 선택 가능`}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] ${schoolUnitFilters.has(u) ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
+                          {schoolUnitFilters.has(u) ? '✓ ' : ''}{nameOf(u)} <span className="tabular-nums text-zinc-500">{n}</span>
                         </button>
                       ))}
                       {unclassified > 0 && (
@@ -1397,17 +1421,17 @@ export default function ExamCreatePage() {
                         </span>
                       )}
                     </div>
-                    {schoolUnitFilter && typeChips.length > 1 && (
+                    {schoolUnitFilters.size > 0 && typeChips.length > 1 && (
                       <div className="mb-3 flex flex-wrap items-center gap-1.5 pl-1">
                         <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-content-tertiary">유형</span>
-                        <button type="button" onClick={() => setSchoolTypeFilter('')}
-                          className={`rounded-full border px-2 py-0.5 text-[10px] ${!schoolTypeFilter ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
+                        <button type="button" onClick={() => setSchoolTypeFilters(new Set())}
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${schoolTypeFilters.size === 0 ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-400 hover:text-content-primary'}`}>
                           전체 <span className="tabular-nums text-zinc-500">{inUnit.length}</span>
                         </button>
                         {typeChips.map(([t, n]) => (
-                          <button key={t} type="button" onClick={() => setSchoolTypeFilter(t === schoolTypeFilter ? '' : t)} title={t}
-                            className={`rounded-full border px-2 py-0.5 text-[10px] ${schoolTypeFilter === t ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
-                            {nameOf(t)} <span className="tabular-nums text-zinc-500">{n}</span>
+                          <button key={t} type="button" onClick={() => setSchoolTypeFilters((s) => toggleIn(s, t))} title={`${t} — 여러 유형 선택 가능`}
+                            className={`rounded-full border px-2 py-0.5 text-[10px] ${schoolTypeFilters.has(t) ? 'border-white/[.2] bg-white/[.1] text-content-primary' : 'border-zinc-700 text-zinc-300 hover:text-content-primary'}`}>
+                            {schoolTypeFilters.has(t) ? '✓ ' : ''}{nameOf(t)} <span className="tabular-nums text-zinc-500">{n}</span>
                           </button>
                         ))}
                       </div>
@@ -1416,7 +1440,8 @@ export default function ExamCreatePage() {
                       <div className="text-xs text-zinc-400">
                         문제 <span className="font-bold text-content-primary tabular-nums">{visibleSchoolProblems.length}</span>건
                         <span className="ml-2 text-zinc-500">
-                          — {selectedSchool} 시험지 {scopeCount}장{schoolUnitFilter ? ` · ${nameOf(schoolTypeFilter || schoolUnitFilter)}` : ''} · 골라서 새 시험지에 편성
+                          — {schoolLabel} 시험지 {scopeCount}장
+                          {schoolUnitFilters.size > 0 ? ` · 단원 ${schoolUnitFilters.size}개` : ''}{schoolTypeFilters.size > 0 ? ` · 유형 ${schoolTypeFilters.size}개` : ''} · 골라서 새 시험지에 편성
                         </span>
                       </div>
                       <button
