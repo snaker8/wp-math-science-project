@@ -62,8 +62,8 @@ export const dashboardNavItems: NavItem[] = [
     //   주소를 직접 쳐야만 들어갈 수 있었다(사용자: "내가 보는 화면에는 안 보이는데").
     //   출처 탭(진단·학교기출·시중교재·모의고사) + 단원 트리 + 난이도 필터 +
     //   선택 트레이(실시간 난이도 분포) + 시험지 편성까지 한 화면에서 흐른다.
-    //   ★ 아래 '유형별 출제'(/dashboard/create)는 **그대로 남긴다** — 기존 흐름을
-    //     쓰시던 분이 있으므로 뺏지 않는다. 새 화면이 자리 잡은 뒤 정리한다.
+    //   ★ 아래 '유형별 출제'(/dashboard/create)는 항목은 두되 **상단 출제 메뉴에서는 뺐다**(2026-10-25 대표 지시).
+    //     라우트는 남아 「새 시험지 만들기」 카드·대시보드 바로가기로 들어간다.
     href: '/dashboard/exam/new',
     icon: SquarePen,
     label: '새 시험지 만들기',
@@ -345,7 +345,8 @@ export const topNavGroups: NavGroup[] = [
       //   (2026-09-01: 항목만 넣고 여기 연결을 빠뜨려 "메뉴에 안 보인다" 재발)
       dash('/dashboard/exam/new'),         // ★ 새 시험지 만들기 — 소스 선택 진입 (설계서 S2)
       dash('/dashboard/exam-create'),      // 시험지 출제 (출처·단원·난이도 + 난이도 분포)
-      dash('/dashboard/create'),           // 유형별 출제 (기존)
+      // ★ 2026-10-25 대표 「출제 탭에 기존 출제 탭은 삭제」 — '유형별 출제 (기존)'(/dashboard/create) 메뉴 항목 제거.
+      //   라우트·화면은 그대로(설계서 §6: 라우트는 남긴다). 「새 시험지 만들기」의 유형별 카드와 대시보드 바로가기로는 계속 열린다.
       tutor('/dashboard/curation'),        // AI 자동 출제
       dash('/dashboard/exam-management'),  // 자산 시험지 출제 (자산화 시험지 인쇄·배포)
       tutor('/dashboard/assignments'),     // 출제 관리 (학생별 출제 현황·점수)
