@@ -43,6 +43,35 @@ describe('parseHml — 모의고사 박스·정답 (2026-10-25)', () => {
     expect(r.problems[0].answer).toBe('$48$');
   });
 
+  it('★★ 지문 "…다음 물음에 답하시오." 뒤 그림만 있는 문단은 다음 문제로 (학평 14-06 고2 #12/#13)', () => {
+    const IMG = '<P><TEXT><PICTURE><IMAGE BinItem="1"/></PICTURE></TEXT></P>';
+    const r = parseHml(Buffer.from(doc(
+      P('기체의 부피는?', ' [정답] ⑤') + PT('① 1② 2③ 3') + PT('④ 4⑤ 5') +
+      PT('그림과 같이 두 곡선이 만나는 점을 P라 하자. 다음 물음에 답하시오.') + IMG +
+      P('선분 AB의 길이는?', ' [정답] ④') + PT('① 6② 7③ 8') + PT('④ 9⑤ 10')
+    ), 'utf8'));
+    expect(r.problems.length).toBe(2);
+    expect(r.problems[0].choices[4]).toBe('⑤ 5');
+    expect(r.problems[0].content).not.toContain('두 곡선');
+    expect(r.problems[1].content).toContain('두 곡선');
+    expect(r.problems[1].content).toContain('선분 AB의 길이는?');
+    expect(r.problems[1].content.indexOf('두 곡선')).toBeLessThan(r.problems[1].content.indexOf('선분 AB'));
+  });
+
+  it('★ 객관식인데 정답이 값(`$12$`)이면 같은 보기 번호(③)로', () => {
+    const r = parseHml(Buffer.from(doc(
+      P('$a_{3}$의 값은?', ' [정답] $12$[해설]…') + PT('① $6$② $9$③ $12$') + PT('④ $15$⑤ $18$')
+    ), 'utf8'));
+    expect(r.problems[0].choices.length).toBe(5);
+    expect(r.problems[0].answer).toBe('③');
+  });
+  it('값이 보기와 안 맞으면 그대로 둔다 (잘못 바꾸지 않음)', () => {
+    const r = parseHml(Buffer.from(doc(
+      P('값은?', ' [정답] $7$') + PT('① $6$② $9$③ $12$') + PT('④ $15$⑤ $18$')
+    ), 'utf8'));
+    expect(r.problems[0].answer).toBe('$7$');
+  });
+
   it('객관식 미주 `[정답] ④[해설]…` → ④', () => {
     const r = parseHml(Buffer.from(doc(
       P('옳은 것은?', ' [정답] ④[해설]풀이 전문') + PT('① 1② 2③ 3④ 4⑤ 5')

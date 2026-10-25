@@ -73,11 +73,23 @@ export interface MockExam {
   kind: 'mock';
   year: number; org: '평가원' | '교육청'; grade: number;
   track: '공통' | '문과' | '이과' | '예체능' | '';
-  month: number | null; // null = 예시 문항
+  month: number | null; // null = 예시 문항·학업성취도 등 월 없는 것
+  /** 지역 교육청(`경남`·`경기도`·`인천`) — 전국 학평과 같은 달이 겹치므로 제목에 넣어 구분 */
+  region?: string;
+  /** 변형 표기 — `예시`·`파이널`·`학업성취도` (제목 꼬리) */
+  label?: string;
 }
 export type Classified = SchoolExam | MadeSheet | MockExam;
 
 const P_MOCK = /^(?:\d+_)?(\d{4})년\s*(?:\(\d{4}학년도\))?\s*(평가원|교육청)\s*고(\d)\s*(공통|문과|이과|예체능)?\s*(?:(\d{1,2})월|(예시\s*문항))\s*$/;
+/**
+ * 변형 10건 (2026-10-25 미러 실측, 정규격 563 외):
+ *   `2027년(2028학년도) 평가원 고3공통 수능 예시 문항` · `2013년(2014학년도) 평가원 고3이과 예시 문항 5월`
+ *   `2016년 경남교육청 고3 10월 수능대비 파이널 수리영역 나형` · `2007년 경기도교육청 고3 5월 학업성취도평가 수리영역 가형`
+ *   `2004년 인천교육청 고3 학업성취도평가 수리영역 나형` · `2023년 교육청 고3공통 4월(5_10시행)`
+ *   가형=이과·나형=문과. 지역 교육청은 전국 학평과 같은 달이라 제목에 지역을 넣는다.
+ */
+const P_MOCK_LOOSE = /^(?:\d+_)?(\d{4})년\s*(?:\(\d{4}학년도\))?\s*(?:(경남|경기도|인천|서울|부산|대구|울산|경북|전남|전북|충남|충북|강원|제주|대전|광주|세종)\s*)?(평가원|교육청)\s*고(\d)\s*(공통|문과|이과|예체능)?\s*(.*)$/;
 
 const P_A = /^(?:\d+_)?내신\s*(\d{4})\s*년\s+(.+?)\s+(중|고)(\d)(\S*)\s+(\d)\s*학기\s*(중간|기말)\s*(.*)$/;
 const P_B = /^(?:\d+_)?(\d{4})년\s+(\S+?)\s+(\d)학년\s+(\d)학기\s*(중간|기말)고사\s*(.*)$/;
@@ -169,6 +181,22 @@ export function classify(fileName: string): Classified {
       track: (mk[4] || '') as MockExam['track'], month: mk[5] ? Number(mk[5]) : null,
     };
   }
+  const ml = n.match(P_MOCK_LOOSE);
+  if (ml) {
+    const rest = ml[6].replace(/\([^)]*\)/g, ' ').trim(); // `4월(5_10시행)` → `4월`
+    const month = rest.match(/(\d{1,2})월/);
+    let track = (ml[5] || '') as MockExam['track'];
+    if (!track && /가형/.test(rest)) track = '이과';
+    if (!track && /나형/.test(rest)) track = '문과';
+    const label = /예시/.test(rest) ? '예시' : /파이널/.test(rest) ? '파이널' : /학업성취도/.test(rest) ? '학업성취도' : '';
+    // 월도 없고 알 수 있는 변형 표기도 없으면 모의고사로 단정하지 않는다
+    if (!month && !label) return { kind: 'made', name: n.replace(/^\d+_/, '').trim() || n };
+    return {
+      kind: 'mock', year: Number(ml[1]), org: ml[3] as '평가원' | '교육청', grade: Number(ml[4]), track,
+      month: label === '예시' ? null : month ? Number(month[1]) : null,
+      ...(ml[2] ? { region: ml[2] } : {}), ...(label ? { label } : {}),
+    };
+  }
   return { kind: 'made', name: n.replace(/^\d+_/, '').trim() || n };
 }
 
@@ -205,9 +233,11 @@ export function buildTitle(c: Classified): string {
   if (c.kind === 'mock') {
     // `26-06 평가원 고3` · `25-09 교육청 고1` · `20-06 평가원 고3 이과` · `04-예시 평가원 고3 문과`
     const yy = String(c.year).slice(2);
-    const mm = c.month == null ? '예시' : String(c.month).padStart(2, '0');
+    const mm = c.month == null ? (c.label || '예시') : String(c.month).padStart(2, '0');
     const track = c.track && c.track !== '공통' ? ` ${c.track}` : '';
-    return `${yy}-${mm} ${c.org} 고${c.grade}${track}`;
+    // 월이 있는 변형(`16-10 경남교육청 고3 문과 파이널`)은 꼬리로, 월이 없으면 월 자리에(`04-학업성취도 인천교육청 고3 이과`)
+    const tail = c.label && c.label !== '예시' && c.month != null ? ` ${c.label}` : '';
+    return `${yy}-${mm} ${c.region || ''}${c.org} 고${c.grade}${track}${tail}`;
   }
   const yy = String(c.year).slice(2);
   const p = c.period === '중간' ? 'M' : 'F';
