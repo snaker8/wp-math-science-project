@@ -71,6 +71,17 @@ describe('parseHml — 모의고사 박스·정답 (2026-10-25)', () => {
     expect(r.problems[1].content).toContain('[도형]');
     expect(r.problems[1].content).toContain('양수 $k$의 값은?');
   });
+  it('★★ 보기 ⑤ 뒤 그림만 있는 문단은 현재 문제의 그림 (보기 이미지 아님, 다음 문제 아님) — 평가원 25-11 #7', () => {
+    const r = parseHml(Buffer.from(doc(
+      P('두 곡선으로 둘러싸인 부분의 넓이는?', ' [정답] ③') + PT('[3.00점]') + PT('① 1② 2③ 3') + PT('④ 4⑤ 5') + PT('[도형]') +
+      P('$\\sin \\theta$의 값은?', ' [정답] ①') + PT('① 1② 2③ 3④ 4⑤ 5')
+    ), 'utf8'));
+    expect(r.problems.length).toBe(2);
+    expect(r.problems[0].choices[4]).toBe('⑤ 5');
+    expect(r.problems[0].choiceImagesBase64).toEqual([]);
+    expect(r.problems[0].content.endsWith('[도형]')).toBe(true);
+    expect(r.problems[1].content.startsWith('[도형]')).toBe(false);
+  });
   it('서답형(보기 없음) 뒤 문단은 종전대로 현재 문제에 남는다 (회귀)', () => {
     const r = parseHml(Buffer.from(doc(
       P('다음 값을 구하시오.', ' [정답] $7$') + PT('$a+b$의 값을 구하시오.') + PT('[4.00점]') +

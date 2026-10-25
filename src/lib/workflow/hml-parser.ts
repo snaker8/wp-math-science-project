@@ -446,6 +446,19 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
     const split = splitChoices(body);
     let content = normalizeBogiBox(split.content);
     let choices = split.choices;
+    // ★ 2026-10-25: 보기 ⑤ 뒤에 따라오는 그림([도형]만 있는 줄)은 보기 ⑤의 그림이 아니라 **문제의 그림**이다
+    //   (수학비서 모의고사 배치 — 그림이 보기 아래에 온다. 평가원 25-11 #7: 두 곡선 넓이 그림이 ⑤ 보기 이미지로 들어갔었다).
+    //   마지막 보기 끝의 [도형] 줄들을 본문 끝으로 옮긴다. 보기 텍스트가 비면(진짜 그림 보기) 건드리지 않는다.
+    let trailingFigs = 0;
+    if (choices.length) {
+      const last = choices[choices.length - 1];
+      const m = last.match(/^([\s\S]*?\S)((?:\s*\n\s*\[도형\])+)\s*$/);
+      if (m && m[1].trim()) {
+        trailingFigs = (m[2].match(/\[도형\]/g) || []).length;
+        choices[choices.length - 1] = m[1].trim();
+        content = `${content}\n${Array(trailingFigs).fill('[도형]').join('\n')}`;
+      }
+    }
     // ★ 표 객관식 감지 — 헤더행 + 셀들 → choiceHeaders + `|` 셀구분. (감지 안 되면 그대로)
     let choiceHeaders: string[] | undefined;
     const tbl = detectTableChoices(content, choices);
@@ -461,9 +474,13 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
     if (content || choices.length) {
       // ★ [도형] 마커 순서 = cur.images 순서. 본문 [도형] → stem, 보기 [도형] → 보기 이미지.
       const stemCount = (content.match(/\[도형\]/g) || []).length;
-      const stemImages = cur.images.slice(0, stemCount);
+      // 본문 그림 = 앞쪽(stemCount - trailingFigs) + 보기 뒤 꼬리 그림(trailingFigs, 문서 순서상 마지막)
+      const frontCount = Math.max(0, stemCount - trailingFigs);
+      const stemImages = trailingFigs
+        ? [...cur.images.slice(0, frontCount), ...cur.images.slice(Math.max(frontCount, cur.images.length - trailingFigs))]
+        : cur.images.slice(0, stemCount);
       const choiceImagesBase64: (string | null)[] = [];
-      let imgIdx = stemCount;
+      let imgIdx = frontCount;
       for (const c of choices) {
         if (/\[도형\]/.test(c)) { choiceImagesBase64.push(cur.images[imgIdx] ?? null); imgIdx++; }
         else choiceImagesBase64.push(null);
@@ -597,9 +614,12 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       //   **첫 문단이 아니라 질문 문단**에 붙기도 한다. 그러면 앞 문단(그림 설명·[도형])이 직전 문제 보기 ⑤ 뒤에 붙는다.
       //   객관식 보기 ⑤까지 다 나온 뒤에 오는 보기·배점·출처가 아닌 문단은 **다음 문제 것**이다 → 보류(pending).
       //   서답형(보기 없음)·그림 객관식 라인(①② 포함)·[N점]·[출처] 는 종전대로.
+      //   ★ 단, 보기 ⑤ 뒤의 **그림만 있는 문단**은 현재 문제의 그림이다(수학비서 배치: 그림이 문제 끝에 온다, 평가원 25-11 #7·
+      //     24-09 #44 실측). 글 문단이 먼저 와서 pending 이 열린 뒤의 그림만 다음 문제로 간다(위 분기).
       const choiceDone = cur.lines.some((l) => /⑤/.test(l) && hasChoiceMarkOutsideMathTable(l));
-      if (choiceDone && (stem || para.images.length)
-          && !(stem && hasChoiceMarkOutsideMathTable(stem))
+      const imageOnly = stem ? /^(?:\s*\[도형\]\s*)+$/.test(stem) : para.images.length > 0;
+      if (choiceDone && stem && !imageOnly
+          && !hasChoiceMarkOutsideMathTable(stem)
           && !/^\s*\[\s*(?:총\s*)?\d+(?:\.\d+)?\s*점\s*\]\s*$/.test(stem)
           && !/\[출처\]|빠른\s*정답/.test(stem)) {
         pending = pending
