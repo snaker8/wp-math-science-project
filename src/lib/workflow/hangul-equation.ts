@@ -16,6 +16,7 @@ const BACKSLASH_CMDS = [
   'left', 'right', 'sqrt', 'frac', 'over',
   // 연산/관계
   'times', 'div', 'pm', 'mp', 'cdot', 'ast', 'star',
+  'bullet', // ∙ 글머리 기호 (2026-10-25 학평 26-03 고1 #13 요금제 표: `$bullet$가입비` 가 "bullet" 글자로 노출)
   'leq', 'geq', 'neq', 'ne', 'le', 'ge', 'equiv', 'approx', 'sim', 'propto',
   'subset', 'supset', 'subseteq', 'supseteq', 'in', 'notin', 'cup', 'cap',
   // 집합·합성 (2026-09-02 추가 — 사대부고 실사고). 미변환 시 화면에 글자로 샌다:

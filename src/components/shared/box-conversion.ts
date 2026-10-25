@@ -227,11 +227,18 @@ const innerBody = m
 const hasComplexEnv = hasAlignedInside
   || /\\begin\{(?:array|cases|aligned)\}/i.test(innerBody)
   || /\\\\\s*\[/.test(innerBody);
-const looksLikeSolutionBox = hasAlignedInside || (!isMultiColumnTable && hasComplexEnv);
-
 // boxed 안의 (가)/(나) placeholder 제거 후 라벨 카운트
 //   \boxed{\text{(가)}} 의 (가) 는 placeholder 라 셀의 보기 라벨과 의미 다름
 const stripped = m.replace(/\\boxed\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, '');
+// ★ 행 머리의 (가)/(나) · ㄱ./ㄴ. 라벨 (2026-10-25, 학평 25-09 고2 #20): 조건박스 (가) 항목 안에 점화식
+//   `\begin{cases}` 가 있으면 hasComplexEnv 로 풀이박스로 빠져 테두리·\hline 을 떼고 KaTeX array 경로로 가다
+//   `\begin{cases}` 가 글자로 새고 `$$` 가 노출됐다. 행 머리에 조건 라벨이 있으면 풀이박스가 아니라 조건박스다
+//   (convertChoiceTabularBox 가 cases/matrix/aligned 를 보호해 그대로 인라인 수식으로 넘긴다).
+//   풀이박스의 (가)(나) 는 \boxed{(가)} placeholder 라 stripped 에서 이미 빠져 있다. aligned 중첩은 종전대로 풀이박스.
+const hasRowHeadLabels = /(?:^|\\hline|\\\\|&)\s*(?:[\(（]\s*[가나다라마]\s*[\)）]|[ㄱㄴㄷㄹㅁ]\s*[.)])/.test(
+  stripped.replace(/^\s*\\begin\{(?:tabular|array)\}(?:\s*\{[^}]*\})?/i, ''),
+);
+const looksLikeSolutionBox = hasAlignedInside || (!isMultiColumnTable && hasComplexEnv && !hasRowHeadLabels);
 
 // 보기형 tabular 감지: ㄱ./ㄴ. 또는 가./나. 또는 \text{가.} 또는 (가)/(나) 패턴
 //   ★ boxed 제거된 stripped 에서 검사 — placeholder 오탐 차단

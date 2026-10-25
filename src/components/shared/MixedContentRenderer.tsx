@@ -566,7 +566,11 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
                   const allShort = labeledItems ? labeledItems.length <= 6 && itemWidths.every((w) => w <= 18) : false;
                   const hasFrac = /\\[dt]?frac/.test(boxContent);
                   const gridItems = hasCases ? splitLabeledBoxItems(boxContent) : (labeledItems && labeledItems.length >= 2 ? labeledItems : null);
-                  const twoCol = hasCases || allShort;
+                  // ★ 2026-10-25 (학평 25-09 고2 #20): (가) 항목 하나에 점화식 cases 1개 + 문장이 든 조건박스가
+                  //   hasCases 만으로 2열이 돼 (가) 긴 항목 옆에 (나) 가 붙었다. 2열은 "cases 가 여러 개(항목마다 연립)"
+                  //   인 보기 박스(2026-07-24 요청) 에만 — cases 1개면 세로 1열.
+                  const multiCases = (boxContent.match(/\\begin\{cases\}/g) || []).length >= 2;
+                  const twoCol = multiCases || allShort;
                   const rowGap = hasFrac ? 'gap-y-3' : 'gap-y-1.5';
                   const base = 1000 + boxIdx * 100;
                   return (

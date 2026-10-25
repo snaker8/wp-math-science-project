@@ -205,11 +205,18 @@ function renderTableToTabular(
 
   // ★ 정의/요금 박스 — 보기·조건 아님 + 1열인데 셀 내부 줄(P)이 2개 이상이면, 원본처럼 가운데
   //   테두리 박스(단일 열 tabular)로 복원. 인라인 폴백은 줄바꿈을 뭉개 한 줄로 붕괴시킨다
-  //   (거제여중 #18 버스 요금표 A⇔B/B⇔C/A⇔C 3줄이 한 줄로 붕괴 + 다음 문제로 밀림). 셀 줄 = 각 행.
+  //   (거제여중 #18 버스 요금표 A⇔B/B⇔C/A⇔C 3줄이 한 줄로 붕괴 + 다음 문제로 밀림).
+  // ★ 2026-10-25 (평가원 26-06 #20 「…구하는 과정이다」 박스): 1행 1칸 안에 문단(P)이 14개인 박스를
+  //   문단마다 `\\ \hline` 으로 이어 붙여, 렌더러(parseTabularBlock)가 문단마다 윗선을 그어 14칸짜리 표로
+  //   쌓였다. 원본은 선 없는 한 칸이다. → **표의 행(ROW) 사이에만 `\hline`**, 한 칸 안의 문단은 `\\` 만.
+  //   렌더러는 \hline 없는 행엔 윗선을 안 그리므로 테두리 하나에 문단이 줄바꿈으로 들어간다.
   if (!isBoxHeader && colN === 1) {
-    const boxLines = valid.flat().flat().map((s) => s.trim()).filter(Boolean);
-    if (boxLines.length >= 2) {
-      const body = boxLines.join(' \\\\ \\hline ');
+    const rowBodies = valid
+      .map((r) => r.flat().map((s) => s.trim()).filter(Boolean).join(' \\\\ '))
+      .filter(Boolean);
+    const lineCount = valid.flat().flat().filter((s) => s.trim()).length;
+    if (lineCount >= 2) {
+      const body = rowBodies.join(' \\\\ \\hline ');
       return `\n\\begin{tabular}{|c|}\\hline ${body} \\\\ \\hline\\end{tabular}\n`;
     }
   }
@@ -380,7 +387,9 @@ function extractAnswerAndStem(after: string): { answer: string; stem: string } {
 
 /** 미주 정답 채널에서 정답 추출 ([정답] 뒤). 객관식=①~⑤, 서답형=정답 수식·값 */
 function answerFromChannel(after: string): string {
-  const s = after.trim();
+  // ★ 2026-10-25 (평가원·학평 파일): 미주가 `[정답] $48$[해설]…풀이 전문…` 꼴이라 서답형 정답에 해설 수천 자가
+  //   통째로 딸려 들어갔다(객관식은 첫 글자 ①~⑤ 만 집어 무사). [해설] 이후는 정답이 아니다 → 잘라낸다.
+  const s = after.split(/\[\s*해\s*설\s*\]/)[0].trim();
   const circled = s.match(/^([①②③④⑤⑥⑦⑧⑨⑩])/);
   return circled ? circled[1] : s;
 }
