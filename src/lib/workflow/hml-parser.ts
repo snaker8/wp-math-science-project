@@ -496,6 +496,9 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       // ★ 2026-10-25 (평가원 15-09 문과 #22 등 12건): 객관식인데 미주 정답이 ④ 가 아니라 값(`$12$`)으로 적힌 파일.
       //   그대로 두면 자산화 가드(객관식 답은 ①~⑤만)가 빈 답으로 버린다. 값이 보기 하나와 정확히 같으면 그 번호로.
       let answer = cur.answer;
+      // `(1)`~`(5)` 꼴(학평 13-06 고2 #15 등 6건) = 보기 번호
+      const parenIdx = finalChoices.length && answer ? answer.match(/^\(\s*([1-9])\s*\)$/) : null;
+      if (parenIdx && Number(parenIdx[1]) <= finalChoices.length) answer = CHOICE_MARKS[Number(parenIdx[1]) - 1];
       if (finalChoices.length && answer && !/^[①②③④⑤⑥⑦⑧⑨⑩]/.test(answer)) {
         const norm = (s: string) => s.replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/, '').replace(/\\left|\\right|\\[,;!]|[\s$]/g, '').replace(/\\d?frac/g, '\\frac');
         const hits = finalChoices.map((c, i) => (norm(c) === norm(answer) ? i : -1)).filter((i) => i >= 0);
@@ -588,6 +591,20 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       //   지문+그림이 붙고 다음 문제는 "선분 AB의 길이는?" 한 줄만 남았다. 그림만 오면 지문에 이어 붙이고 기다린다.
       if (pending && (stem ? /^(?:\s*\[도형\]\s*)+$/.test(stem) : para.images.length > 0)) {
         pending = { text: [pending.text, stem].filter(Boolean).join('\n'), images: [...pending.images, ...para.images] };
+        continue;
+      }
+      // ★ 2026-10-25 (학평 13-04 고3 #11·14-03 고2 #11·15-03 고1 #12): 수학비서 모의고사 파일은 [정답] 미주가 문제의
+      //   **첫 문단이 아니라 질문 문단**에 붙기도 한다. 그러면 앞 문단(그림 설명·[도형])이 직전 문제 보기 ⑤ 뒤에 붙는다.
+      //   객관식 보기 ⑤까지 다 나온 뒤에 오는 보기·배점·출처가 아닌 문단은 **다음 문제 것**이다 → 보류(pending).
+      //   서답형(보기 없음)·그림 객관식 라인(①② 포함)·[N점]·[출처] 는 종전대로.
+      const choiceDone = cur.lines.some((l) => /⑤/.test(l) && hasChoiceMarkOutsideMathTable(l));
+      if (choiceDone && (stem || para.images.length)
+          && !(stem && hasChoiceMarkOutsideMathTable(stem))
+          && !/^\s*\[\s*(?:총\s*)?\d+(?:\.\d+)?\s*점\s*\]\s*$/.test(stem)
+          && !/\[출처\]|빠른\s*정답/.test(stem)) {
+        pending = pending
+          ? { text: [pending.text, stem].filter(Boolean).join('\n'), images: [...pending.images, ...para.images] }
+          : { text: stem, images: [...para.images] };
         continue;
       }
       if (pending && (stem || para.images.length)) {
