@@ -458,11 +458,16 @@ function ManualSearchPanel({
   selectedTypeCodes,
   manualSelected,
   onToggleSelect,
+  source = '',
+  schools = [],
 }: {
   subjectCode: string;
   selectedTypeCodes: string[];
   manualSelected: Set<string>;
   onToggleSelect: (id: string, problem: SearchProblem) => void;
+  /** 출처 범위 (전체 '' / school / textbook / mock) — 검색도 같은 범위로 */
+  source?: string;
+  schools?: string[];
 }) {
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState('');
@@ -484,6 +489,8 @@ function ManualSearchPanel({
         ? selectedTypeCodes.join(',')
         : subjectCode ? `MS${subjectCode}` : '';
       if (tc) params.set('typeCode', tc);
+      if (source) params.set('source', source);
+      if (source === 'school' && schools.length) params.set('schools', schools.join(','));
       params.set('limit', '30');
 
       const res = await fetch(`/api/problems/search?${params}`);
@@ -496,7 +503,7 @@ function ManualSearchPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [query, difficulty, answerType, subjectCode, selectedTypeCodes]);
+  }, [query, difficulty, answerType, subjectCode, selectedTypeCodes, source, schools]);
 
   // 엔터키 검색
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -973,6 +980,11 @@ function DifficultyDistributionBar({
   perTypeCap,
   onPerTypeCap,
   selectedCount,
+  source,
+  onSource,
+  schools,
+  onSchools,
+  schoolOptions,
 }: {
   difficulties: Record<DifficultyLevel, number>;
   availableCounts: Record<string, number>;
@@ -998,7 +1010,15 @@ function DifficultyDistributionBar({
   onPerTypeCap: (c: number) => void;
   /** 상한·중복제외 뒤 남은 후보 수 (매쓰홀릭 「선택 N」) */
   selectedCount: number;
+  /** 출처 — '' 전체 · school 학교기출 · textbook 시중교재 · mock 모의고사 */
+  source: '' | 'school' | 'textbook' | 'mock';
+  onSource: (s: '' | 'school' | 'textbook' | 'mock') => void;
+  schools: string[];
+  onSchools: (s: string[]) => void;
+  schoolOptions: string[];
 }) {
+  const [schoolPickerOpen, setSchoolPickerOpen] = useState(false);
+  const [schoolQuery, setSchoolQuery] = useState('');
   const levels: DifficultyLevel[] = DIFF_ORDER;
   const isBand = selectionMode === 'band';
   const excludedRecent = availableCounts.excludedRecent ?? 0;
@@ -1013,6 +1033,53 @@ function DifficultyDistributionBar({
           <span className="text-sm font-semibold text-content-primary">문항수를 선택해 주세요</span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {/* ★ 출처 — 전체 / 학교기출(특정 학교) / 시중교재 / 모의고사. 고르면 「있는 문제 수」·검색·생성이 모두 그 범위로 (2026-10-25) */}
+          <div className="relative flex items-center gap-1 rounded-lg border border-subtle p-0.5">
+            {([['', '전체'], ['school', '학교기출'], ['textbook', '시중교재'], ['mock', '모의고사']] as Array<['' | 'school' | 'textbook' | 'mock', string]>).map(([v, label]) => (
+              <button
+                key={v || 'all'}
+                type="button"
+                onClick={() => { onSource(v); if (v !== 'school') { onSchools([]); setSchoolPickerOpen(false); } else setSchoolPickerOpen(true); }}
+                className={`rounded-md px-2 py-1 text-[11px] transition-colors ${
+                  source === v ? 'bg-white text-black font-semibold' : 'text-content-tertiary hover:text-content-primary'
+                }`}
+              >
+                {label}{v === 'school' && source === 'school' && schools.length > 0 ? ` ${schools.length}개교` : ''}
+              </button>
+            ))}
+            {source === 'school' && (
+              <button type="button" onClick={() => setSchoolPickerOpen((o) => !o)} className="px-1.5 text-[11px] text-content-secondary hover:text-content-primary" title="특정 학교만">
+                {schools.length ? '학교 변경' : '학교 고르기'}
+              </button>
+            )}
+            {source === 'school' && schoolPickerOpen && (
+              <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-subtle bg-zinc-950 p-2 shadow-xl">
+                <input
+                  type="text"
+                  value={schoolQuery}
+                  onChange={(e) => setSchoolQuery(e.target.value)}
+                  placeholder="학교명 검색 (비우면 전체 학교기출)"
+                  className="mb-1.5 w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-content-primary placeholder-zinc-500 focus:border-white/25 focus:outline-none"
+                />
+                <div className="max-h-56 overflow-y-auto">
+                  {schoolOptions.length === 0 && <div className="px-1 py-2 text-[11px] text-zinc-500">학교 목록 불러오는 중…</div>}
+                  {schoolOptions.filter((s) => !schoolQuery.trim() || s.includes(schoolQuery.trim())).slice(0, 200).map((s) => {
+                    const on = schools.includes(s);
+                    return (
+                      <button key={s} type="button" onClick={() => onSchools(on ? schools.filter((x) => x !== s) : [...schools, s])}
+                        className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] ${on ? 'bg-white/[.1] text-content-primary' : 'text-zinc-300 hover:bg-white/5'}`}>
+                        <span className="truncate">{s}</span>{on && <span className="text-[10px]">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[10px] text-zinc-500">
+                  <button type="button" onClick={() => onSchools([])} className="underline hover:text-content-primary">전체 학교</button>
+                  <button type="button" onClick={() => setSchoolPickerOpen(false)} className="rounded bg-white px-2 py-0.5 font-semibold text-black">닫기</button>
+                </div>
+              </div>
+            )}
+          </div>
           {/* 답안 형태 — 고르면 아래 밴드별 「있는 문제 수」도 그 형태 기준으로 다시 센다 */}
           <div className="flex items-center gap-1 rounded-lg border border-subtle p-0.5">
             {ANSWER_TYPES.map((a) => (
@@ -1262,6 +1329,25 @@ export default function PaperCreatePage() {
   const [availableCounts, setAvailableCounts] = useState<Record<string, number>>({});
   // 출제 구성 — 답안 형태 · 최대 문제수 (설계서 S1 「출제 구성 패널」)
   const [answerType, setAnswerType] = useState('');
+  // ★ 출처 — 전체 / 학교기출(특정 학교 복수) / 시중교재 / 모의고사 (2026-10-25 대표 「유형별 출제에서도 구분을 두고, 특정 학교 기출만 원하면 거기서도」)
+  //   검색·집계·생성 세 호출에 같은 값을 실어 「보이는 수 = 뽑히는 수」.
+  const [sourceKind, setSourceKind] = useState<'' | 'school' | 'textbook' | 'mock'>('');
+  const [sourceSchools, setSourceSchools] = useState<string[]>([]);
+  const [schoolOptions, setSchoolOptions] = useState<string[]>([]);
+  useEffect(() => {
+    if (sourceKind !== 'school' || schoolOptions.length > 0) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/exams/school-filter-options', { cache: 'no-store' });
+        const data = await res.json();
+        const names = new Set<string>();
+        for (const sido of (data.regionTree || []) as Array<{ sigungus?: Array<{ schools?: string[] }> }>)
+          for (const sg of sido.sigungus || []) for (const s of sg.schools || []) names.add(s);
+        for (const s of (data.otherSchools || []) as string[]) names.add(s);
+        setSchoolOptions(Array.from(names).sort((a, b) => a.localeCompare(b, 'ko')));
+      } catch { /* 목록 못 받으면 입력으로 */ }
+    })();
+  }, [sourceKind, schoolOptions.length]);
   const [maxQuestions, setMaxQuestions] = useState<number>(30);
   // ★ 중복출제 방지 기간(일) — 기본 30, 0 = 끄기. localStorage 에 남겨 다음 출제에도 유지
   const [dedupeDays, setDedupeDays] = useState<number>(30);
@@ -1533,7 +1619,7 @@ export default function PaperCreatePage() {
         // ★ POST 본문으로 — 세부유형 코드가 수백 개면 GET URL 이 헤더 한도(Vercel 16KB)를 넘는다
         const res = await fetch('/api/exams/available-counts', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType, excludeRecentDays: dedupeDays, perTypeCap }),
+          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType, excludeRecentDays: dedupeDays, perTypeCap, source: sourceKind, schools: sourceKind === 'school' ? sourceSchools : [] }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -1547,7 +1633,7 @@ export default function PaperCreatePage() {
     // ★ answerType 도 deps — 답안 형태를 바꾸면 밴드별 「있는 문제 수」를 다시 세야 한다
     // ★ 배열 대신 문자열 키 — 같은 범위인데 배열 참조만 바뀌어 6번씩 다시 세던 것 (실측 09-20)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTypeCodes.join(','), answerType, dedupeDays, perTypeCap]);
+  }, [selectedTypeCodes.join(','), answerType, dedupeDays, perTypeCap, sourceKind, sourceSchools.join('|')]);
 
   // ★ 단계 적용 — 문제 수·가능 문항수·단계가 바뀔 때마다 (맞춤이면 손대지 않음)
   useEffect(() => {
@@ -1788,6 +1874,8 @@ export default function PaperCreatePage() {
           typeCodes: selectedTypeCodes,
           difficulty_distribution: difficulties,
           answerType,
+          source: sourceKind,
+          schools: sourceKind === 'school' ? sourceSchools : [],
           excludeRecentDays: dedupeDays,
           selection: selectionMode,
           perTypeCap,
@@ -2107,6 +2195,8 @@ export default function PaperCreatePage() {
                     selectedTypeCodes={selectedTypeCodes}
                     manualSelected={manualSelected}
                     onToggleSelect={handleManualToggle}
+                    source={sourceKind}
+                    schools={sourceKind === 'school' ? sourceSchools : []}
                   />
                 ) : (
                   <TypeDetailPanel
@@ -2144,6 +2234,11 @@ export default function PaperCreatePage() {
                 selectionMode={selectionMode}
                 onSelectionMode={changeSelectionMode}
                 perTypeCap={perTypeCap}
+                source={sourceKind}
+                onSource={setSourceKind}
+                schools={sourceSchools}
+                onSchools={setSourceSchools}
+                schoolOptions={schoolOptions}
                 onPerTypeCap={changePerTypeCap}
                 selectedCount={selectedCount}
               />

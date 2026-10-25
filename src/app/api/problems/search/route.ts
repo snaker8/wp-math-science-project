@@ -7,6 +7,7 @@ import { LEVELS_BY_BAND_LABEL } from '@/lib/class/mastery-bands';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, applyTrackFilter } from '@/lib/security/institute-guard';
+import { parseSourceScope, loadSourceProblemIds } from '@/lib/exam/source-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,10 +30,13 @@ export async function GET(request: NextRequest) {
   const answerType = searchParams.get('answerType') || '';   // multiple_choice 객관식 · short_answer 서답형
   const excludeExamId = searchParams.get('excludeExamId') || '';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
+  // ★ 출처 범위 — `source=school|textbook|mock|diagnostic` + `schools=a,b` (lib/exam/source-scope, 집계·생성과 같은 집합)
+  const sourceScope = parseSourceScope({ source: searchParams.get('source'), schools: searchParams.get('schools') });
 
   try {
     // ★ 1단계: classifications에서 조건에 맞는 problem_id 목록 먼저 조회
     let matchedProblemIds: string[] | null = null;
+    const sourceIds = await loadSourceProblemIds(supabaseAdmin, sourceScope);
 
     if (typeCodes.length > 0 || difficulty || band) {
       // ★ classifications 는 문제를 소프트 삭제해도 남는다 — 여기서 안 거르면
@@ -64,10 +68,15 @@ export async function GET(request: NextRequest) {
       }
 
       matchedProblemIds = [...new Set((classRows || []).map((r: any) => r.problem_id))];
+      if (sourceIds) matchedProblemIds = matchedProblemIds.filter((id) => sourceIds.has(id));
 
       if (matchedProblemIds.length === 0) {
         return NextResponse.json({ problems: [] });
       }
+    } else if (sourceIds) {
+      // 유형 조건 없이 출처만 — 범위 집합 자체가 후보 (아래 .in() 은 limit*3 까지만 싣는다)
+      if (sourceIds.size === 0) return NextResponse.json({ problems: [] });
+      matchedProblemIds = Array.from(sourceIds);
     }
 
     // ★ 2단계: problems 조회 (+ classifications 조인으로 메타데이터 포함)
