@@ -45,7 +45,14 @@ import { parseExamTitleMeta } from '@/lib/workflow/exam-title-meta';
 // ★ 카드 미리보기 — [도형]·[도형:line:35%] 마커는 그림 자리표시라 글자로 보이면 안 된다 (2026-10-25 부흥중 카드).
 //   그림 자체는 편성·인쇄 화면에서 렌더된다. 여기선 걷어내고 "그림" 표시만.
 function previewLatex(s: string): string {
-  return truncateLatexPreview((s || '').replace(/\[도형(?::[^\]]*)?\]/g, ' ').replace(/[ \t]{2,}/g, ' ').trim(), 200);
+  return truncateLatexPreview(
+    (s || '')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')          // 마크다운 그림 `![이미지](url)` — 카드에선 통째로 렌더돼 키가 커지거나 잘려 `![이미지]...` 로 샌다
+      .replace(/\[도형(?::[^\]]*)?\]/g, ' ')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim(),
+    200,
+  );
 }
 import { SelectionTray, type PickedProblem } from '@/components/exam-create/SelectionTray';
 import { WeakClinicPanel, type WeakProblemRow } from '@/components/exam-create/WeakClinicPanel';
