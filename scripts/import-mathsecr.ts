@@ -376,13 +376,20 @@ async function main() {
       : title;
     if (seenKeys.has(dupKey)) { skipped++; continue; }
 
+    // ★ 조회 자체가 실패(fetch failed)하면 "없음"으로 보지 않는다 — 2026-10-25 3차 실행에서 네트워크 오류 순간에
+    //   가드가 통과돼 평가원 13장이 두 번 들어갔다(createExamFromHml 안의 가드도 try/catch 로 통과시킨다). 실패로 기록하고 넘어간다.
     if (cls.kind === 'school') {
-      const { data } = await sb.from('exams').select('id,title')
+      const { data, error } = await sb.from('exams').select('id,title')
         .like('title', `${dupKey}%`).is('deleted_at', null).limit(1);
+      if (error) { failed++; report.push(`적재실패  ${title} — 중복 조회 실패(${error.message}) → 재실행 대상`); continue; }
       if (data?.length) { seenKeys.add(dupKey); skipped++; continue; }
     } else {
-      const { data } = await sb.from('exams').select('id')
-        .eq('title', title).is('deleted_at', null).limit(1);
+      // 모의고사 고3 통합형은 `…고3 공통/확률과 통계/미적분/기하` 로 나뉘어 저장되므로 접두 일치로 본다.
+      const q = cls.kind === 'mock'
+        ? sb.from('exams').select('id').like('title', `${title}%`).is('deleted_at', null).limit(1)
+        : sb.from('exams').select('id').eq('title', title).is('deleted_at', null).limit(1);
+      const { data, error } = await q;
+      if (error) { failed++; report.push(`적재실패  ${title} — 중복 조회 실패(${error.message}) → 재실행 대상`); continue; }
       if (data?.length) { seenKeys.add(dupKey); skipped++; continue; }
     }
     seenKeys.add(dupKey);
