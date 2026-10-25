@@ -44,6 +44,26 @@ import { parseExamTitleMeta } from '@/lib/workflow/exam-title-meta';
 
 // ★ 카드 미리보기 — [도형]·[도형:line:35%] 마커는 그림 자리표시라 글자로 보이면 안 된다 (2026-10-25 부흥중 카드).
 //   그림 자체는 편성·인쇄 화면에서 렌더된다. 여기선 걷어내고 "그림" 표시만.
+// ★ 학교기출 카드 목록을 한 번에 그리는 묶음 크기. 스크롤이 끝에 닿으면 다음 묶음을 더한다.
+const SCHOOL_RENDER_STEP = 60;
+
+/** 화면에 들어오면 onVisible 을 부르는 빈 요소 — 카드 목록 끝에 두어 다음 묶음을 불러온다. */
+function LoadMoreSentinel({ onVisible, label }: { onVisible: () => void; label: string }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) onVisible(); }, { rootMargin: '400px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onVisible]);
+  return (
+    <div ref={ref} className="col-span-full flex items-center justify-center gap-2 py-4 text-[11px] text-zinc-500">
+      <Loader2 className="h-3 w-3 animate-spin" /> {label}
+    </div>
+  );
+}
+
 function previewLatex(s: string): string {
   return truncateLatexPreview(
     (s || '')
@@ -258,6 +278,8 @@ export default function ExamCreatePage() {
   const [schoolTypeFilters, setSchoolTypeFilters] = useState<Set<string>>(new Set());   // 소단원 코드(4세그먼트)
   // ★ 단원 트리 펼침 상태 (과목 MS03 · 대단원 MS03-06). 비어 있으면 과목이 하나일 때만 자동으로 펼친다.
   const [schoolTreeOpen, setSchoolTreeOpen] = useState<Set<string>>(new Set());
+  // ★ 카드 목록은 스크롤에 맞춰 나눠 그린다 — 전체 학교 풀(수천 건)을 한 번에 KaTeX 로 그리면 화면이 몇 초 멈춘다.
+  const [schoolRenderLimit, setSchoolRenderLimit] = useState(SCHOOL_RENDER_STEP);
   const ALL_SCHOOLS = '__ALL__';
   const [schoolTypeNames, setSchoolTypeNames] = useState<Map<string, string>>(new Map()); // 코드 → 이름 (/api/mathsecr/tree)
   const [schoolQuery, setSchoolQuery] = useState('');
@@ -488,6 +510,8 @@ export default function ExamCreatePage() {
     if (selectedSchoolExamIds.size === 0) return all;
     return all.filter((id) => selectedSchoolExamIds.has(id));
   }, [filteredSchoolExams, selectedSchool, selectedSchoolExamIds]);
+  // 범위·단원·유형이 바뀌면 처음 묶음부터 다시 그린다
+  useEffect(() => { setSchoolRenderLimit(SCHOOL_RENDER_STEP); }, [schoolScopeExamIds, schoolUnitFilters, schoolTypeFilters]);
 
   // ★ 범위의 시험지 문제를 모아 풀을 만든다 — 시험지별로 캐시, 합집합은 id 중복 제거(같은 문제가 두 시험지에 묶인 경우)
   useEffect(() => {
@@ -1573,7 +1597,7 @@ export default function ExamCreatePage() {
                       </button>
                     </div>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                      {visibleSchoolProblems.map((p) => {
+                      {visibleSchoolProblems.slice(0, schoolRenderLimit).map((p) => {
                         const cls = Array.isArray(p.classifications) ? p.classifications[0] : p.classifications;
                         const diff = cls ? parseInt(String(cls.difficulty), 10) : 0;
                         const code = cls?.type_code || '';
@@ -1612,6 +1636,13 @@ export default function ExamCreatePage() {
                           </button>
                         );
                       })}
+                      {visibleSchoolProblems.length > schoolRenderLimit && (
+                        <LoadMoreSentinel
+                          key={`more-${schoolRenderLimit}`}
+                          onVisible={() => setSchoolRenderLimit((n) => n + SCHOOL_RENDER_STEP)}
+                          label={`${Math.min(schoolRenderLimit, visibleSchoolProblems.length)} / ${visibleSchoolProblems.length} 표시 — 내리면 더 불러옵니다`}
+                        />
+                      )}
                     </div>
                   </>
                 )}
