@@ -95,27 +95,36 @@ export async function GET(request: NextRequest) {
     const examIds = (exams || []).map((e: any) => e.id);
     const problemCountMap = new Map<string, number>();
 
+    // ★ id 묶음 — `.in()` 은 GET 쿼리스트링이라 id 를 수천 개 넣으면 요청 자체가 실패한다.
+    //   (실측 2026-10-28: 시험지 2,469건 전체 목록에서 문항 수·미리보기가 전부 0/빈값 —
+    //    오류는 try/catch 에 묻혀 조용히 0 으로 나갔다.) 200개씩 나눠 병렬로 받는다.
+    const ID_CHUNK = 200;
+    const idChunks: string[][] = [];
+    for (let i = 0; i < examIds.length; i += ID_CHUNK) idChunks.push(examIds.slice(i, i + ID_CHUNK));
+
     if (examIds.length > 0) {
       try {
         // ★ Supabase .select() 기본 limit 1000 초과 시 마지막 row 들이 잘려서
         //   일부 exam 의 problemCount=0 으로 표시되던 사고 (동백중 2-1 22건이 보이지 않던 케이스).
-        //   exam_problems 가 1000+ rows 인 운영 환경에선 페이지네이션 필수.
+        //   exam_problems 가 1000+ rows 인 운영 환경에선 페이지네이션 필수 (묶음마다).
         const PAGE = 1000;
-        let from = 0;
-        for (;;) {
-          const { data: counts, error } = await supabaseAdmin
-            .from('exam_problems')
-            .select('exam_id, problem_id')
-            .in('exam_id', examIds)
-            .range(from, from + PAGE - 1);
-          if (error) { console.warn('[API/exams] count page error:', error.message); break; }
-          if (!counts || counts.length === 0) break;
-          for (const row of counts) {
-            problemCountMap.set(row.exam_id, (problemCountMap.get(row.exam_id) || 0) + 1);
+        await Promise.all(idChunks.map(async (ids) => {
+          let from = 0;
+          for (;;) {
+            const { data: counts, error } = await supabaseAdmin!
+              .from('exam_problems')
+              .select('exam_id')
+              .in('exam_id', ids)
+              .range(from, from + PAGE - 1);
+            if (error) { console.warn('[API/exams] count page error:', error.message); break; }
+            if (!counts || counts.length === 0) break;
+            for (const row of counts) {
+              problemCountMap.set(row.exam_id, (problemCountMap.get(row.exam_id) || 0) + 1);
+            }
+            if (counts.length < PAGE) break;
+            from += PAGE;
           }
-          if (counts.length < PAGE) break;
-          from += PAGE;
-        }
+        }));
       } catch {
         // exam_problems 테이블 접근 실패 시 무시 (문제 수 0으로 표시)
         console.warn('[API/exams] exam_problems count 조회 실패');
@@ -152,25 +161,35 @@ export async function GET(request: NextRequest) {
     const previewMap = new Map<string, string>();
     if (examIds.length > 0) {
       try {
-        const { data: firstRows } = await supabaseAdmin
-          .from('exam_problems')
-          .select('exam_id, problem_id')
-          .in('exam_id', examIds)
-          .eq('sequence_number', 1);
+        // ★ 묶음별 조회 (위 ID_CHUNK 주석) — exam 당 1행이라 묶음 200 이면 1000행 한계 안쪽.
+        const firstRows = (await Promise.all(idChunks.map(async (ids) => {
+          const { data } = await supabaseAdmin!
+            .from('exam_problems')
+            .select('exam_id, problem_id')
+            .in('exam_id', ids)
+            .eq('sequence_number', 1);
+          return data || [];
+        }))).flat();
 
         const problemIds = (firstRows || []).map((r) => r.problem_id).filter(Boolean);
         if (problemIds.length > 0) {
-          const { data: firstProblems } = await supabaseAdmin
-            .from('problems')
-            .select('id, content_latex')
-            .in('id', problemIds)
-            .is('deleted_at', null);
+          const firstProblems = (await Promise.all(
+            Array.from({ length: Math.ceil(problemIds.length / ID_CHUNK) }, (_, i) => problemIds.slice(i * ID_CHUNK, (i + 1) * ID_CHUNK))
+              .map(async (ids) => {
+                const { data } = await supabaseAdmin!
+                  .from('problems')
+                  .select('id, content_latex')
+                  .in('id', ids)
+                  .is('deleted_at', null);
+                return data || [];
+              }),
+          )).flat();
 
           const textById = new Map<string, string>();
-          for (const p of firstProblems || []) {
+          for (const p of firstProblems) {
             textById.set(p.id, p.content_latex || '');
           }
-          for (const r of firstRows || []) {
+          for (const r of firstRows) {
             const preview = buildPreviewText(textById.get(r.problem_id));
             if (preview) previewMap.set(r.exam_id, preview);
           }

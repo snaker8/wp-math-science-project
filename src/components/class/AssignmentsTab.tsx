@@ -287,7 +287,7 @@ function CreateAssignmentModal({
     let alive = true;
     (async () => {
       try {
-        const res = await fetch('/api/exams?limit=300');
+        const res = await fetch('/api/exams?limit=5000');
         const data = await res.json();
         if (!alive) return;
         setExams(((data.exams || []) as Array<Record<string, unknown>>).map((e) => ({
