@@ -2855,35 +2855,15 @@ export default function CloudPage() {
                             onMouseEnter={() => prefetchExam(exam.id)}
                             className="group flex flex-col rounded-xl border border-subtle bg-surface-card transition-colors hover:border-white/[.14] hover:bg-surface-raised/30 cursor-pointer"
                           >
-                            {/* ★ 액자형 썸네일 — 1번 문제 본문을 실제로 작게 그린다 (2026-07-23).
-                                예전엔 회색 문서 모티브 플레이스홀더였다. 카드 높이의 40%,
-                                가장 눈이 먼저 가는 자리인데 아무 정보가 없어 화면이 허전하면서
-                                복잡해 보였다. 이제 무슨 시험지인지 내용으로 구분된다.
-                                previewText 가 없으면(구 데이터·조회 실패) 기존 모티브로 폴백. */}
+                            {/* 액자형 썸네일 — 문서 모티브. 1번 문제 본문 미리보기는 뺐다
+                                (대표 2026-10-28 "별로라서" — 그림 주소·수식 잔재가 글자로 새고 시선을 다툼). */}
                             <div className="relative m-2 mb-0 flex h-20 overflow-hidden rounded-lg border border-subtle bg-black/20">
-                              {exam.previewText ? (
-                                // ★ 미리보기는 "읽는 글"이 아니라 "무늬"다 (2026-07-23 사용자 피드백).
-                                //   처음엔 본문색으로 그렸더니 아래 제목·학교와 시선을 다퉈
-                                //   정작 중요한 정보의 가독성이 떨어졌다. 대비를 낮추고 아래쪽을
-                                //   페이드시켜 종이가 이어지는 느낌으로 뒤에 물린다.
-                                <p
-                                  className="w-full px-2.5 pb-2 pt-6 text-[9px] leading-[1.5] text-content-muted/60 line-clamp-4 break-words select-none"
-                                  style={{
-                                    maskImage: 'linear-gradient(to bottom, #000 62%, transparent)',
-                                    WebkitMaskImage: 'linear-gradient(to bottom, #000 62%, transparent)',
-                                  }}
-                                  aria-hidden
-                                >
-                                  {exam.previewText}
-                                </p>
-                              ) : (
-                                <div className="m-auto flex w-14 flex-col gap-1 rounded-sm bg-white/[0.04] p-2">
-                                  <div className="h-1 w-3/5 rounded-full bg-white/20"></div>
-                                  <div className="h-0.5 w-full rounded-full bg-white/10"></div>
-                                  <div className="h-0.5 w-4/5 rounded-full bg-white/10"></div>
-                                  <div className="h-0.5 w-11/12 rounded-full bg-white/10"></div>
-                                </div>
-                              )}
+                              <div className="m-auto flex w-14 flex-col gap-1 rounded-sm bg-white/[0.04] p-2">
+                                <div className="h-1 w-3/5 rounded-full bg-white/20"></div>
+                                <div className="h-0.5 w-full rounded-full bg-white/10"></div>
+                                <div className="h-0.5 w-4/5 rounded-full bg-white/10"></div>
+                                <div className="h-0.5 w-11/12 rounded-full bg-white/10"></div>
+                              </div>
                               <span className="absolute left-2 top-2 inline-flex h-5 min-w-[24px] items-center justify-center rounded-md bg-black/50 px-1.5 text-[10px] font-bold text-content-secondary">
                                 #{exam.order}
                               </span>
