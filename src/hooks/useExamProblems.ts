@@ -250,7 +250,9 @@ export function useExamList() {
   const fetchExams = useCallback(async () => {
     try {
       // ★ API route 사용 (supabaseAdmin으로 RLS 바이패스)
-      const res = await fetch('/api/exams');
+      // ★ 전체 목록 — 기본 200건이면 그보다 오래된 시험지가 시험지 관리·채점·리포트 고르기에서 사라진다
+      //   (2026-10-25 HML 686건 적재로 최근 200건이 전부 새 자료가 되며 드러남).
+      const res = await fetch('/api/exams?limit=5000');
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         console.error('[ExamList] API error:', res.status, errData);

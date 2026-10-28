@@ -83,7 +83,7 @@ export default function CreateSessionsModal({
     setExamsLoading(true);
     (async () => {
       try {
-        const res = await fetch('/api/exams');
+        const res = await fetch('/api/exams?limit=5000');
         const data = await res.json();
         if (!cancelled && Array.isArray(data.exams)) {
           setExams(data.exams.map((e: any) => ({
