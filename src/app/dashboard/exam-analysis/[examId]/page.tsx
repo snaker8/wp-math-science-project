@@ -24,7 +24,7 @@ import {
   TableIcon,
   Share2,
 } from 'lucide-react';
-import { useExamProblems, useExamList } from '@/hooks/useExamProblems';
+import { useExamProblems } from '@/hooks/useExamProblems';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { AIInsightTabs } from './AIInsightTabs';
@@ -70,8 +70,9 @@ export default function ExamAnalysisPage() {
   const examId = params?.examId as string;
   const goBack = useSmartBack(`/dashboard/cloud/${examId}`);
 
-  const { exams } = useExamList();
-  const { problems, isLoading } = useExamProblems(examId);
+  // ★ 시험지 정보는 이 시험지 응답(examInfo)에서 — 최근 200건 목록(useExamList)에서 찾으면
+  //   그보다 오래된 시험지는 「찾을 수 없습니다」로 빠졌다 (신곡중 23-2-1-F, 2026-10-28).
+  const { problems, examInfo: exam, isLoading } = useExamProblems(examId);
   const [unitNameMap, setUnitNameMap] = useState<Record<string, string>>({});
   const [isExporting, setIsExporting] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
@@ -116,8 +117,6 @@ export default function ExamAnalysisPage() {
 
   // 상단 탭 — 유형 분석 vs 학생 채점
   const [topTab, setTopTab] = useState<TopTab>('analysis');
-
-  const exam = useMemo(() => exams.find((e) => e.id === examId), [exams, examId]);
 
   // 페이지 진입 시 캐시된 AI 분석 조회
   useEffect(() => {
