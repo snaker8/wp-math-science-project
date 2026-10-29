@@ -15,6 +15,7 @@ import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import { DiagramBrowserModal } from '@/components/papers/DiagramBrowserModal';
 import dynamic from 'next/dynamic';
 import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
+import { MAX_CHOICE_COLUMNS } from '@/lib/workflow/tabular-choices';
 
 // GraphModal은 Desmos API 사용하므로 dynamic import
 const GraphModal = dynamic(
@@ -369,8 +370,8 @@ function ChoicesEditor({
     onChoiceHeadersChange(next);
   };
   const handleAddColumn = () => {
-    if (choiceHeaders.length >= 4) return;
-    const defaults = ['A', 'B', 'C', 'D'];
+    if (choiceHeaders.length >= MAX_CHOICE_COLUMNS) return; // 최대 6컬럼 (㉠~㉥ 6열 보기표 학교 있음)
+    const defaults = ['A', 'B', 'C', 'D', 'E', 'F'];
     const next = [...choiceHeaders, defaults[choiceHeaders.length] || ''];
     onChoiceHeadersChange(next);
   };
@@ -461,7 +462,7 @@ function ChoicesEditor({
                       className="w-5 h-5 rounded text-[10px] font-bold text-content-secondary border border-white/[.14] bg-surface-raised hover:bg-white/[.06] disabled:opacity-30 disabled:cursor-not-allowed"
                       title="컬럼 제거">−</button>
                     <button type="button" onClick={handleAddColumn}
-                      disabled={choiceHeaders.length >= 4}
+                      disabled={choiceHeaders.length >= MAX_CHOICE_COLUMNS}
                       className="w-5 h-5 rounded text-[10px] font-bold text-content-secondary border border-white/[.14] bg-surface-raised hover:bg-white/[.06] disabled:opacity-30 disabled:cursor-not-allowed"
                       title="컬럼 추가 (최대 4)">+</button>
                   </div>

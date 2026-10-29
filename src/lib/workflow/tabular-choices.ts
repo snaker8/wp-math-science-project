@@ -12,16 +12,55 @@
 
 const MARKS = ['①', '②', '③', '④', '⑤'];
 
+/** 표 객관식 최대 열 수 — 편집 모달 2곳 공용. ㉠~㉥ 6열 보기표를 내는 학교가 있다 (2026-10-29). */
+export const MAX_CHOICE_COLUMNS = 6;
+
 /**
  * content 에서 표 객관식 블록을 찾아 변환. 아니면 null(호출측은 원본 유지).
  * 반환: { content(표 제거), choices(`① a | b`), choiceHeaders } | null
  */
 export function detectTabularChoices(content: string):
   { content: string; choices: string[]; choiceHeaders: string[] } | null {
-  const blockRe = /\\begin\{(?:tabular|array)\}(?:\s*\{[^}]*\})?([\s\S]*?)\\end\{(?:tabular|array)\}/;
-  const m = content.match(blockRe);
-  if (!m || m.index == null) return null;
-  const rawRows = m[1].split(/\\\\|\n/).map((r) => r.replace(/\\hline/g, '').trim()).filter(Boolean);
+  // ★ 본문의 모든 최상위 표를 차례로 본다 — 첫 표만 보면 [자료1]/[자료2] 설명표 뒤의 보기표를 놓쳤다.
+  //   표 안의 표(\begin{tabular}[t]{l})는 짝을 맞춰 바깥 표에 포함 — 안쪽 \end 에서 끊으면 바깥 표가 반토막.
+  //   (2026-10-29 「직사각형·마름모 대각선」 6열 보기표 미감지)
+  for (const b of findTopLevelTables(content)) {
+    if (/\\begin\{(?:tabular|array)\}/.test(b.inner)) continue; // 중첩 표는 설명표 — 보기표 아님
+    const r = parseChoiceTable(b.inner);
+    if (!r) continue;
+    const newContent = (content.slice(0, b.start) + content.slice(b.end)).replace(/\n{2,}/g, '\n').trim();
+    return { content: newContent, ...r };
+  }
+  return null;
+}
+
+/** 최상위 tabular/array 블록 위치 (중첩 짝 맞춤). inner = 열 지정 뒤 ~ \end 앞 */
+function findTopLevelTables(content: string): { start: number; end: number; inner: string }[] {
+  const tokRe = /\\(begin|end)\{(?:tabular|array)\}/g;
+  const out: { start: number; end: number; inner: string }[] = [];
+  let depth = 0;
+  let start = -1;
+  let innerStart = -1;
+  let t: RegExpExecArray | null;
+  while ((t = tokRe.exec(content)) !== null) {
+    if (t[1] === 'begin') {
+      if (depth === 0) {
+        start = t.index;
+        // 열 지정 `[t]{|l|l|}` 건너뛰기
+        const spec = content.slice(tokRe.lastIndex).match(/^\s*(?:\[[^\]]*\])?\s*(?:\{[^}]*\})?/);
+        innerStart = tokRe.lastIndex + (spec ? spec[0].length : 0);
+      }
+      depth++;
+    } else if (depth > 0) {
+      depth--;
+      if (depth === 0) out.push({ start, end: tokRe.lastIndex, inner: content.slice(innerStart, t.index) });
+    }
+  }
+  return out;
+}
+
+function parseChoiceTable(inner: string): { choices: string[]; choiceHeaders: string[] } | null {
+  const rawRows = inner.split(/\\\\|\n/).map((r) => r.replace(/\\hline/g, '').trim()).filter(Boolean);
   if (rawRows.length < 4) return null; // 헤더 + 최소 3보기
   const rows = rawRows.map((r) => r.split('&').map((c) => c.trim()));
   const labelRe = /^\$?\s*[(（]?\s*([1-5])\s*[)）]?\s*\$?$/;
@@ -49,7 +88,5 @@ export function detectTabularChoices(content: string):
   if (headerCells.length !== colN) return null;
 
   const choices = labeled.map((l) => `${MARKS[l.idx - 1] || ''} ${l.cells.join(' | ')}`.trim());
-  const newContent = (content.slice(0, m.index) + content.slice(m.index + m[0].length))
-    .replace(/\n{2,}/g, '\n').trim();
-  return { content: newContent, choices, choiceHeaders: headerCells };
+  return { choices, choiceHeaders: headerCells };
 }

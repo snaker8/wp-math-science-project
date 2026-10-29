@@ -48,4 +48,25 @@ describe('detectTabularChoices — 표 객관식 블록 → choiceHeaders/choice
   it('표가 없으면 null', () => {
     expect(detectTabularChoices('그냥 텍스트 문제입니다.')).toBeNull();
   });
+
+  it('★ 설명표(표 안의 표) 뒤의 6열 보기표 — 두 번째 표까지 보고, 설명표는 온전히 남긴다', () => {
+    const content = String.raw`[자료1], [자료2]는 각각 직사각형과 마름모의 두 대각선이 서로를 이등분함을 설명하는 과정이다. ㉠~㉥에 들어갈 내용으로 옳은 것은?
+\begin{tabular}{|l|l|}\hline [자료1] & \begin{tabular}[t]{l}직사각형은 ㉠ 사각형이다. \\ 따라서 두 대각선은 서로를 이등분한다.\end{tabular} \\ \hline [자료2] & \begin{tabular}[t]{l}마름모는 ㉣ 사각형이다. \\ 따라서 두 대각선은 서로를 이등분한다.\end{tabular} \\ \hline\end{tabular}
+\begin{tabular}{ccccccc}& ㉠ & ㉡ & ㉢ & ㉣ & ㉤ & ㉥ \\ ① & Ⓐ & Ⓒ & Ⓔ & Ⓐ & Ⓒ & Ⓕ \\ ② & Ⓐ & Ⓓ & Ⓔ & Ⓑ & Ⓒ & Ⓔ \\ ③ & Ⓐ & Ⓓ & Ⓔ & Ⓑ & Ⓓ & Ⓔ \\ ④ & Ⓑ & Ⓒ & Ⓔ & Ⓐ & Ⓓ & Ⓔ \\ ⑤ & Ⓑ & Ⓓ & Ⓕ & Ⓑ & Ⓒ & Ⓔ \\ \end{tabular}`;
+    const r = detectTabularChoices(content);
+    expect(r).not.toBeNull();
+    expect(r!.choiceHeaders).toEqual(['㉠', '㉡', '㉢', '㉣', '㉤', '㉥']);
+    expect(r!.choices).toHaveLength(5);
+    expect(r!.choices[0]).toBe('① Ⓐ | Ⓒ | Ⓔ | Ⓐ | Ⓒ | Ⓕ');
+    // 설명표는 바깥 \begin 부터 바깥 \end 까지 통째로 남아 있어야 한다
+    expect(r!.content).toContain('[자료1]');
+    expect(r!.content).toContain('[자료2]');
+    expect((r!.content.match(/\\begin\{tabular\}/g) || []).length).toBe(3);
+    expect((r!.content.match(/\\end\{tabular\}/g) || []).length).toBe(3);
+  });
+
+  it('설명표만 있고 보기표가 없으면 null (중첩 표 오탐 X)', () => {
+    const content = String.raw`\begin{tabular}{|l|l|}\hline (1) & \begin{tabular}[t]{l}a\end{tabular} \\ (2) & b \\ (3) & c \\ (4) & d \\ \end{tabular}`;
+    expect(detectTabularChoices(content)).toBeNull();
+  });
 });

@@ -15,6 +15,7 @@ import {
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { LaTeXInputModal } from '@/components/editor/LaTeXInputModal';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
+import { MAX_CHOICE_COLUMNS } from '@/lib/workflow/tabular-choices';
 
 // ============================================================================
 // Types
@@ -581,8 +582,8 @@ function ChoicesEditor({
     onChoiceHeadersChange(next);
   };
   const handleAddColumn = () => {
-    if (choiceHeaders.length >= 4) return; // 최대 4컬럼
-    const defaults = ['A', 'B', 'C', 'D'];
+    if (choiceHeaders.length >= MAX_CHOICE_COLUMNS) return; // 최대 6컬럼 (㉠~㉥ 6열 보기표 학교 있음)
+    const defaults = ['A', 'B', 'C', 'D', 'E', 'F'];
     const next = [...choiceHeaders, defaults[choiceHeaders.length] || ''];
     onChoiceHeadersChange(next);
   };
@@ -676,7 +677,7 @@ function ChoicesEditor({
                       className="w-5 h-5 rounded text-[10px] font-bold text-gray-600 border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
                       title="컬럼 제거">−</button>
                     <button type="button" onClick={handleAddColumn}
-                      disabled={choiceHeaders.length >= 4}
+                      disabled={choiceHeaders.length >= MAX_CHOICE_COLUMNS}
                       className="w-5 h-5 rounded text-[10px] font-bold text-gray-600 border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
                       title="컬럼 추가 (최대 4)">+</button>
                   </div>
