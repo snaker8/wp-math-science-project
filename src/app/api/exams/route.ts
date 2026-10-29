@@ -179,7 +179,8 @@ export async function GET(request: NextRequest) {
       if (/수[학]?1/.test(t)) return '수학1';
       return '공통수학1';
     };
-    const detectExamTypeFromTitle = (t: string) => /모의고사|모의|평가원/.test(t) ? '모의고사' : '학교기출';
+    // ★ 교육청(학력평가) 포함 — 빠져 있어 교육청 모의고사 495장이 학교기출로 보정됐다 (2026-10-29)
+    const detectExamTypeFromTitle = (t: string) => /모의고사|모의|평가원|수능|교육청|학력평가|학평/.test(t) ? '모의고사' : '학교기출';
     const detectGradeFromTitle = (t: string) => {
       // ★ 중학교 학년 — 학교명 뒤 "X-1" 학기 패턴도 포함
       if (/중\s*1(?:[- ]|\s|$)/.test(t) || (/중/.test(t) && /\b1-[12]\b/.test(t))) return '중1';

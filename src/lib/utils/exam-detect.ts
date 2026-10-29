@@ -121,6 +121,7 @@ export function detectGradeFromTitle(title: string): string {
  * 제목에서 시험 유형 감지
  */
 export function detectExamTypeFromTitle(title: string): string {
-  if (/모의고사|모의|평가원|수능/.test(title)) return '모의고사';
+  // ★ 교육청(학력평가) 포함 — 빠져 있어 「26-09 교육청 고2」 495장이 학교기출로 박혔다 (2026-10-29)
+  if (/모의고사|모의|평가원|수능|교육청|학력평가|학평/.test(title)) return '모의고사';
   return '학교기출';
 }
