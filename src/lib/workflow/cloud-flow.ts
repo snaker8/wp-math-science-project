@@ -653,14 +653,19 @@ function buildQuestionResult(
 
   // ★ 표 객관식 자동 감지 — 보기가 따로 안 잡혔는데(choices 비었음) 본문에 보기-표(\begin{tabular}
   //   헤더행 + (1)~(5) 라벨행)가 있으면 choiceHeaders+choices 로 변환(화명중 #5류). 데이터 표는 미발동.
+  //   ★ 보기표가 한 줄(\begin{tabular}…①…⑤…)로 오면 그 줄이 ① 때문에 보기 줄로 먼저 잡혀 choices 가
+  //     표 토막(`& Ⓐ & Ⓒ … \\`)으로 채워지고 감지가 건너뛰어졌다 (2026-10-29 ㉠~㉥ 6열 보기표).
+  //     보기가 표 줄에서만 나왔으면 표 감지를 먼저 시도한다 — 감지 실패면 기존 choices 그대로.
   let finalChoices = choices;
   let choiceHeaders: string[] | undefined;
-  if (choices.length === 0) {
+  const choicesFromTableLine = group.choiceTexts.some(t => /\\begin\{(?:tabular|array)\}/.test(t || ''));
+  if (choices.length === 0 || choicesFromTableLine) {
     const tbl = detectTabularChoices(contentMmd);
     if (tbl) {
       contentMmd = tbl.content;
       finalChoices = tbl.choices;
       choiceHeaders = tbl.choiceHeaders;
+      choiceLayout = undefined; // 표 객관식은 표로 렌더 — 줄당 마커 수로 잡은 배치는 무의미
     }
   }
 
