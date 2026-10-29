@@ -32,6 +32,10 @@ const COMMIT = process.argv.includes('--commit');
 const DRY = process.argv.includes('--dry');
 // 이전 run 의 stage1 코드가 같은 문항은 그 run 의 Stage 2 예측을 재사용 (Stage 2 재호출 비용 절약)
 const REUSE_FROM = ARG('reuse-stage2-from') || '';
+// 대상 좁히기 — exam_type(예: 모의고사)만, 시험지당 N문항만(시범 분류를 여러 시험지로 퍼뜨릴 때)
+const EXAM_TYPE = ARG('exam-type') || '';
+const PER_EXAM = Number(ARG('per-exam') || 0);
+const NEWEST = process.argv.includes('--newest'); // 제목 역순(최근 시험지부터)
 if (!RUN) { console.error('--run=<id> 필수'); process.exit(1); }
 
 for (const line of fs.readFileSync('.env.local', 'utf-8').split('\n')) {
@@ -83,10 +87,14 @@ async function select(): Promise<Target[]> {
   if (!LIMIT || LIMIT < 1) throw new Error('--limit=N 필수 (유료 호출 상한)');
   const db = sb();
   type ExamRow = { id: string; title: string; subject: string | null; grade: string | null; curriculum_codes: string[] | null };
-  const exams = (await pageAll<ExamRow>((a, b) => db.from('exams').select('id,title,subject,grade,curriculum_codes').is('deleted_at', null).overlaps('curriculum_codes', SUBJECTS).range(a, b)))
+  const exams = (await pageAll<ExamRow>((a, b) => {
+    let q = db.from('exams').select('id,title,subject,grade,curriculum_codes').is('deleted_at', null).overlaps('curriculum_codes', SUBJECTS);
+    if (EXAM_TYPE) q = q.eq('exam_type', EXAM_TYPE);
+    return q.range(a, b);
+  }))
     // 과목 코드가 전부 대상 과목 안에 있어야 한다 (중등+고등 섞인 시험지는 제외)
     .filter((e) => (e.curriculum_codes || []).length > 0 && (e.curriculum_codes || []).every((c) => SUBJECTS.includes(String(c))))
-    .sort((a, b) => String(a.curriculum_codes).localeCompare(String(b.curriculum_codes)) || a.title.localeCompare(b.title));
+    .sort((a, b) => String(a.curriculum_codes).localeCompare(String(b.curriculum_codes)) || (NEWEST ? b.title.localeCompare(a.title) : a.title.localeCompare(b.title)));
   const classified = new Set((await pageAll<{ problem_id: string }>((a, b) => db.from('classifications').select('problem_id').order('problem_id').range(a, b))).map((r) => r.problem_id));
   const targets: Target[] = [];
   const seen = new Set<string>();
@@ -102,8 +110,10 @@ async function select(): Promise<Target[]> {
     const byId = new Map((probs || []).map((p) => [p.id, p]));
     const codes = (e.curriculum_codes || []).map(String);
     const first = codes[0];
+    let fromThisExam = 0;
     for (const id of ids) {
       if (targets.length >= LIMIT) break;
+      if (PER_EXAM && fromThisExam >= PER_EXAM) break;
       const p = byId.get(id) as { content_latex: string | null; answer_json: { choices?: unknown[] } | null } | undefined;
       const content = (p?.content_latex || '').trim();
       if (content.length < 20) { skippedShort++; continue; }
@@ -111,6 +121,7 @@ async function select(): Promise<Target[]> {
       const choices = Array.isArray(p?.answer_json?.choices) ? (p!.answer_json!.choices as unknown[]).map((c) => (typeof c === 'string' ? c : (c as { text?: string })?.text || '').trim()).filter(Boolean).slice(0, 6) : [];
       const text = content.slice(0, 1500) + (choices.length ? `\n\n보기:\n${choices.join('\n').slice(0, 600)}` : '');
       seen.add(id);
+      fromThisExam++;
       targets.push({ id, examId: e.id, examTitle: e.title, codes, examSubject: codes.length === 1 ? SUBJECT_NAME[first] || e.subject || '' : codes.map((c) => SUBJECT_NAME[c] || c).join('/'), examGrade: SUBJECT_GRADE[first] || e.grade || '', text });
     }
   }
