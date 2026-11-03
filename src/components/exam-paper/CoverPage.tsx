@@ -228,6 +228,8 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
   // ★ 저장한 표지 — 시험지와 무관한 표지 묶음(디자인·이미지·제목·부제목·학원명·안내문). 센터 라이브러리에 JSON 으로.
   const [templates, setTemplates] = useState<CoverTemplate[] | null>(null);
   const [tplName, setTplName] = useState('');
+  /** 운영자(super_admin) — 올린 이미지가 공용으로 가고, 공용 표지도 지울 수 있다 */
+  const [canManageShared, setCanManageShared] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -240,6 +242,7 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
       if (!r.ok) throw new Error(j.error || r.statusText);
       setItems(j.items as CoverAsset[]);
       setTemplates((j.templates as CoverTemplate[]) ?? []);
+      setCanManageShared(j.canManageShared === true);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setItems([]); setTemplates([]); }
   };
   useEffect(() => { if (items === null) void load(); }, [items]);
@@ -338,7 +341,7 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
       {isImage && (
         <div className="flex flex-col gap-2 rounded-lg border border-white/10 p-2">
           <div className="flex items-center justify-between">
-            <span className="text-content-secondary">표지 이미지 — 이 센터 라이브러리</span>
+            <span className="text-content-secondary">{canManageShared ? '표지 이미지 — 올리면 모든 센터 공용' : '표지 이미지 — 이 센터 라이브러리'}</span>
             <label className="cursor-pointer rounded-md bg-white px-2 py-1 font-semibold text-black hover:bg-white/90">
               {busy && !busy.startsWith('del:') ? busy : '이미지 올리기'}
               <input ref={fileRef} type="file" accept="image/*" className="hidden" disabled={!!busy && !busy.startsWith('del:')}
@@ -363,8 +366,8 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={it.url} alt={it.name} className="h-full w-full object-cover" loading="lazy" />
                   </button>
-                  {/* 공용 표지는 센터에서 못 지운다 (서버도 이 센터 폴더만 허용) */}
-                  {!it.shared && (
+                  {/* 공용 표지는 센터에서 못 지운다 (서버도 이 센터 폴더만 허용) — 운영자만 지움 */}
+                  {(!it.shared || canManageShared) && (
                     <button type="button" onClick={() => void remove(it)} title={arming ? '한 번 더 누르면 삭제' : '삭제'}
                       className={`absolute right-1 top-1 rounded px-1 text-[10px] leading-4 ${arming ? 'bg-red-500 text-white' : 'bg-black/70 text-white opacity-0 group-hover:opacity-100'}`}>
                       {arming ? '삭제?' : '×'}
