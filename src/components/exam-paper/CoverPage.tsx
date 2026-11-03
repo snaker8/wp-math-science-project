@@ -32,6 +32,10 @@ export type CoverSettings = {
   academy?: string;
   /** 정보 줄 덮어쓰기 (빈값 = 문항수·출제·시험일·시간 자동). 대표: "문항수도 지금 고정되어 있다" — 예: "25문항 · 50분" */
   infoText?: string;
+  /** 제목 글자 크기 배율 (1 = 기본). 대표 「텍스트 크기도 조절 가능했으면」(2026-11-03) */
+  titleScale?: number;
+  /** 제목 외 글자(부제목·학원명·정보 줄·안내문) 크기 배율 */
+  textScale?: number;
 };
 
 export const DEFAULT_COVER: CoverSettings = { on: false, design: 'minimal', imageUrl: null, overlay: true, note: '', title: '', subtitle: '', academy: '', infoText: '' };
@@ -68,12 +72,6 @@ export function CoverPage({
   examTitle = (settings.title || '').trim() || examTitle;
   const subtitle = (settings.subtitle || '').trim() || [meta.grade, meta.semester, meta.subject, meta.examType].filter(Boolean).join(' · ');
   const academy = (settings.academy || '').trim() || meta.schoolName || '';
-  const info: Array<[string, string]> = [
-    ['문항수', problemCount > 0 ? `${problemCount}문항` : ''],
-    ['출제', meta.teacher || ''],
-    ['시험일', meta.date || ''],
-    ['시간', meta.timeLimit || ''],
-  ].filter(([, v]) => !!v) as Array<[string, string]>;
   const font = "'Pretendard', 'Noto Sans KR', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
 
   const Blanks = ({ dark }: { dark?: boolean }) => (
@@ -87,17 +85,15 @@ export function CoverPage({
     </div>
   );
   const infoOverride = (settings.infoText || '').trim();
+  const TS = settings.titleScale ?? 1;
+  const XS = settings.textScale ?? 1;
+  const t = (n: number) => Math.round(n * TS);
+  const x = (n: number) => Math.round(n * XS);
   const InfoRows = ({ dark }: { dark?: boolean }) => infoOverride ? (
-    <div style={{ fontSize: 12, color: dark ? 'rgba(255,255,255,.9)' : '#475569', whiteSpace: 'pre-wrap' }}>{infoOverride}</div>
-  ) : info.length === 0 ? null : (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 18px', fontSize: 12, color: dark ? 'rgba(255,255,255,.9)' : '#475569' }}>
-      {info.map(([k, v]) => (
-        <span key={k}><span style={{ opacity: .7, marginRight: 6 }}>{k}</span><b style={{ fontWeight: 600 }}>{v}</b></span>
-      ))}
-    </div>
-  );
+    <div style={{ fontSize: x(12), color: dark ? 'rgba(255,255,255,.9)' : '#475569', whiteSpace: 'pre-wrap' }}>{infoOverride}</div>
+  ) : null; /* ★ 2026-11-03 대표: 비우면 아무것도 안 넣는다 (문항수·출제·시험일 자동 채움 폐지) */
   const Note = ({ dark }: { dark?: boolean }) => settings.note.trim() ? (
-    <p style={{ margin: 0, fontSize: 11, lineHeight: 1.6, color: dark ? 'rgba(255,255,255,.85)' : '#64748b', whiteSpace: 'pre-wrap' }}>{settings.note.trim()}</p>
+    <p style={{ margin: 0, fontSize: x(11), lineHeight: 1.6, color: dark ? 'rgba(255,255,255,.85)' : '#64748b', whiteSpace: 'pre-wrap' }}>{settings.note.trim()}</p>
   ) : null;
   const Placeholder = () => (
     <div className="print:hidden" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 13, background: 'repeating-linear-gradient(45deg,#f8fafc,#f8fafc 10px,#f1f5f9 10px,#f1f5f9 20px)' }}>
@@ -119,10 +115,10 @@ export function CoverPage({
     case 'classic':
       body = (
         <div style={{ position: 'absolute', inset: 36, border: `3px double ${color}`, padding: '48px 48px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'center' }}>
-          <div style={{ fontSize: 13, letterSpacing: '.3em', color: '#64748b' }}>{academy}</div>
+          <div style={{ fontSize: x(13), letterSpacing: '.3em', color: '#64748b' }}>{academy}</div>
           <div>
-            <div style={{ fontSize: 34, fontWeight: 800, lineHeight: 1.3, wordBreak: 'keep-all' }}>{examTitle}</div>
-            {subtitle && <div style={{ marginTop: 14, fontSize: 15, color: '#475569' }}>{subtitle}</div>}
+            <div style={{ fontSize: t(34), fontWeight: 800, lineHeight: 1.3, wordBreak: 'keep-all' }}>{examTitle}</div>
+            {subtitle && <div style={{ marginTop: 14, fontSize: x(15), color: '#475569' }}>{subtitle}</div>}
             <div style={{ width: 56, height: 3, background: color, margin: '28px auto 0' }} />
             <div style={{ marginTop: 20, display: 'flex', justifyContent: 'center' }}><InfoRows /></div>
           </div>
@@ -134,9 +130,9 @@ export function CoverPage({
       body = (
         <>
           <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '38%', boxSizing: 'border-box', background: color, color: '#fff', padding: `${PADY}px ${PADX}px 40px`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-            <div style={{ fontSize: 13, letterSpacing: '.2em', opacity: .85, marginBottom: 18 }}>{academy}</div>
-            <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1.25, wordBreak: 'keep-all' }}>{examTitle}</div>
-            {subtitle && <div style={{ marginTop: 12, fontSize: 15, opacity: .9 }}>{subtitle}</div>}
+            <div style={{ fontSize: x(13), letterSpacing: '.2em', opacity: .85, marginBottom: 18 }}>{academy}</div>
+            <div style={{ fontSize: t(36), fontWeight: 800, lineHeight: 1.25, wordBreak: 'keep-all' }}>{examTitle}</div>
+            {subtitle && <div style={{ marginTop: 12, fontSize: x(15), opacity: .9 }}>{subtitle}</div>}
           </div>
           <div style={{ position: 'absolute', left: 0, right: 0, top: '38%', bottom: 0, padding: `40px ${PADX}px ${PADY}px`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <InfoRows />
@@ -148,10 +144,10 @@ export function CoverPage({
     case 'grid':
       body = (
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '18px 18px', padding: `${PADY}px ${PADX}px`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 13, letterSpacing: '.2em', color: '#64748b' }}>{academy}</div>
+          <div style={{ fontSize: x(13), letterSpacing: '.2em', color: '#64748b' }}>{academy}</div>
           <div style={{ borderLeft: `6px solid ${color}`, paddingLeft: 22, background: 'rgba(255,255,255,.9)', paddingTop: 8, paddingBottom: 8 }}>
-            <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1.25, wordBreak: 'keep-all' }}>{examTitle}</div>
-            {subtitle && <div style={{ marginTop: 12, fontSize: 15, color: '#475569' }}>{subtitle}</div>}
+            <div style={{ fontSize: t(38), fontWeight: 800, lineHeight: 1.25, wordBreak: 'keep-all' }}>{examTitle}</div>
+            {subtitle && <div style={{ marginTop: 12, fontSize: x(15), color: '#475569' }}>{subtitle}</div>}
             <div style={{ marginTop: 18 }}><InfoRows /></div>
           </div>
           <div style={{ display: 'grid', gap: 14, background: 'rgba(255,255,255,.9)', padding: '10px 0' }}><Note /><Blanks /></div>
@@ -168,9 +164,9 @@ export function CoverPage({
           </div>
           <div style={{ position: 'absolute', left: 0, right: 0, top: '60%', bottom: 0, padding: `34px ${PADX}px 56px`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 12, letterSpacing: '.2em', color: '#64748b', marginBottom: 10 }}>{academy}</div>
-              <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.25, wordBreak: 'keep-all' }}>{examTitle}</div>
-              {subtitle && <div style={{ marginTop: 8, fontSize: 14, color: '#475569' }}>{subtitle}</div>}
+              <div style={{ fontSize: x(12), letterSpacing: '.2em', color: '#64748b', marginBottom: 10 }}>{academy}</div>
+              <div style={{ fontSize: t(30), fontWeight: 800, lineHeight: 1.25, wordBreak: 'keep-all' }}>{examTitle}</div>
+              {subtitle && <div style={{ marginTop: 8, fontSize: x(14), color: '#475569' }}>{subtitle}</div>}
               <div style={{ marginTop: 12 }}><InfoRows /></div>
             </div>
             <div style={{ display: 'grid', gap: 12 }}><Note /><Blanks /></div>
@@ -188,7 +184,7 @@ export function CoverPage({
           </div>
           {settings.overlay && slot && (() => {
             // ★ 원본 표지의 글자 자리·색·크기·글꼴 그대로 (cover-layouts.ts) — 띠로 그림을 덮지 않는다
-            const infoText = infoOverride || info.map(([, v]) => v).join(' · ');
+            const infoText = infoOverride;
             const textOf = (el: CoverEl): string => {
               switch (el.field) {
                 case 'title': return examTitle;
@@ -218,7 +214,7 @@ export function CoverPage({
                     <div key={i} style={{
                       position: 'absolute', top: `${el.y}%`, ...pos,
                       ...(el.w ? { width: `${el.w}%` } : { whiteSpace: 'nowrap' }),
-                      fontSize: el.size, fontWeight: el.weight, color: el.color, letterSpacing: el.ls, lineHeight: el.lh ?? 1.25,
+                      fontSize: Math.round(el.size * (el.field === 'title' ? TS : el.field === 'static' ? 1 : XS)), fontWeight: el.weight, color: el.color, letterSpacing: el.ls, lineHeight: el.lh ?? 1.25,
                       fontFamily: el.font ? COVER_FONT_FAMILY[el.font] : undefined, wordBreak: 'keep-all', whiteSpace: el.w ? 'pre-wrap' : 'nowrap',
                       ...(el.vertical ? { writingMode: 'vertical-rl', textOrientation: 'upright', width: 'auto' } : {}),
                       ...(el.stroke ? { WebkitTextStroke: `6px ${el.stroke}`, paintOrder: 'stroke fill' } : {}),
@@ -235,9 +231,9 @@ export function CoverPage({
           {settings.overlay && !slot && (
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,.72)', color: '#fff', padding: `28px ${PADX}px 40px`, display: 'grid', gap: 14 }}>
               <div>
-                {academy && <div style={{ fontSize: 12, letterSpacing: '.2em', opacity: .85, marginBottom: 8 }}>{academy}</div>}
-                <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.25, wordBreak: 'keep-all' }}>{examTitle}</div>
-                {subtitle && <div style={{ marginTop: 6, fontSize: 14, opacity: .9 }}>{subtitle}</div>}
+                {academy && <div style={{ fontSize: x(12), letterSpacing: '.2em', opacity: .85, marginBottom: 8 }}>{academy}</div>}
+                <div style={{ fontSize: t(28), fontWeight: 800, lineHeight: 1.25, wordBreak: 'keep-all' }}>{examTitle}</div>
+                {subtitle && <div style={{ marginTop: 6, fontSize: x(14), opacity: .9 }}>{subtitle}</div>}
                 <div style={{ marginTop: 10 }}><InfoRows dark /></div>
               </div>
               <Note dark />
@@ -250,11 +246,11 @@ export function CoverPage({
     default: // minimal
       body = (
         <div style={{ position: 'absolute', inset: 0, padding: `${PADY}px ${PADX}px`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 13, letterSpacing: '.2em', color: '#64748b' }}>{academy}</div>
+          <div style={{ fontSize: x(13), letterSpacing: '.2em', color: '#64748b' }}>{academy}</div>
           <div style={{ marginTop: -80 }}>
             <div style={{ width: 40, height: 3, background: color, marginBottom: 26 }} />
-            <div style={{ fontSize: 40, fontWeight: 800, lineHeight: 1.22, wordBreak: 'keep-all', letterSpacing: '-0.01em' }}>{examTitle}</div>
-            {subtitle && <div style={{ marginTop: 14, fontSize: 16, color: '#475569' }}>{subtitle}</div>}
+            <div style={{ fontSize: t(40), fontWeight: 800, lineHeight: 1.22, wordBreak: 'keep-all', letterSpacing: '-0.01em' }}>{examTitle}</div>
+            {subtitle && <div style={{ marginTop: 14, fontSize: x(16), color: '#475569' }}>{subtitle}</div>}
             <div style={{ marginTop: 24 }}><InfoRows /></div>
           </div>
           <div style={{ display: 'grid', gap: 14 }}><Note /><Blanks /></div>
@@ -435,6 +431,16 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
           )}
         </div>
       )}
+      {([['titleScale', '제목 글자 크기'], ['textScale', '나머지 글자 크기']] as const).map(([k, label]) => {
+        const v = value[k] ?? 1;
+        return (
+          <label key={k} className="flex items-center gap-2 text-content-secondary">
+            <span className="w-24 shrink-0">{label}</span>
+            <input type="range" min={0.6} max={1.8} step={0.05} value={v} onChange={(e) => onChange({ ...value, [k]: Number(e.target.value) })} className="flex-1" />
+            <button type="button" onClick={() => onChange({ ...value, [k]: 1 })} title="기본 크기로" className="w-10 shrink-0 text-right tabular-nums text-content-tertiary hover:text-content-primary">{Math.round(v * 100)}%</button>
+          </label>
+        );
+      })}
       <label className="flex flex-col gap-1 text-content-secondary">
         <span>표지 학원/학교명 (비우면 헤더의 학원/학교)</span>
         <input type="text" value={value.academy || ''} onChange={(e) => onChange({ ...value, academy: e.target.value })} placeholder="예: 과사람 동래 자사관"
@@ -451,7 +457,7 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
           className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
       </label>
       <label className="flex flex-col gap-1 text-content-secondary">
-        <span>표지 정보 줄 (비우면 문항수·출제·시험일 자동)</span>
+        <span>표지 정보 줄 (비우면 안 넣음)</span>
         <input type="text" value={value.infoText || ''} onChange={(e) => onChange({ ...value, infoText: e.target.value })} placeholder="예: 25문항 · 50분 · 2026.10.05"
           className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
       </label>
