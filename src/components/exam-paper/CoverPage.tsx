@@ -44,7 +44,7 @@ export const COVER_DESIGNS: Array<{ id: CoverDesign; label: string; hint: string
   { id: 'image-full', label: '이미지 전면', hint: '이미지가 한 장 전체 · 제목 띠 선택', image: true },
 ];
 
-export type CoverAsset = { name: string; path: string; url: string; size: number; createdAt: string | null };
+export type CoverAsset = { name: string; path: string; url: string; size: number; createdAt: string | null; shared?: boolean };
 export type CoverTemplate = { name: string; path: string; settings: Partial<CoverSettings>; createdAt: string | null };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -363,11 +363,14 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={it.url} alt={it.name} className="h-full w-full object-cover" loading="lazy" />
                   </button>
-                  <button type="button" onClick={() => void remove(it)} title={arming ? '한 번 더 누르면 삭제' : '삭제'}
-                    className={`absolute right-1 top-1 rounded px-1 text-[10px] leading-4 ${arming ? 'bg-red-500 text-white' : 'bg-black/70 text-white opacity-0 group-hover:opacity-100'}`}>
-                    {arming ? '삭제?' : '×'}
-                  </button>
-                  <div className="mt-0.5 truncate text-[10px] text-content-tertiary">{it.name}</div>
+                  {/* 공용 표지는 센터에서 못 지운다 (서버도 이 센터 폴더만 허용) */}
+                  {!it.shared && (
+                    <button type="button" onClick={() => void remove(it)} title={arming ? '한 번 더 누르면 삭제' : '삭제'}
+                      className={`absolute right-1 top-1 rounded px-1 text-[10px] leading-4 ${arming ? 'bg-red-500 text-white' : 'bg-black/70 text-white opacity-0 group-hover:opacity-100'}`}>
+                      {arming ? '삭제?' : '×'}
+                    </button>
+                  )}
+                  <div className="mt-0.5 truncate text-[10px] text-content-tertiary">{it.shared ? `공용 · ${it.name}` : it.name}</div>
                 </div>
               );
             })}

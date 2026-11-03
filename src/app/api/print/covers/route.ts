@@ -22,6 +22,8 @@ const MAX_W = 2480; // A4 @300dpi 가로. 더 크면 줄인다 — 인쇄엔 충
 function prefixOf(instituteId: string) {
   return `uploads/covers/${instituteId}/`;
 }
+/** 공용 표지 — 모든 센터 목록에 같이 보인다. 센터 화면에선 읽기만 (올리기·지우기는 운영자가 직접) (2026-11-02) */
+const COMMON_PREFIX = 'uploads/covers/common/';
 
 async function scope() {
   const authed = await requireAuthScope();
@@ -36,7 +38,7 @@ async function scope() {
   return { instituteId, admin: supabaseAdmin } as const;
 }
 
-export type CoverAsset = { name: string; path: string; url: string; size: number; createdAt: string | null };
+export type CoverAsset = { name: string; path: string; url: string; size: number; createdAt: string | null; shared?: boolean };
 /** 저장한 표지(디자인+이미지+제목·부제목·학원명·안내문) — 시험지와 무관하게 만들어 두고 아무 시험지에나 붙인다 (2026-09-21 대표 요청) */
 export type CoverTemplate = { name: string; path: string; settings: Record<string, unknown>; createdAt: string | null };
 const TPL_DIR = 'templates/';
@@ -46,25 +48,33 @@ export async function GET() {
   const s = await scope();
   if ('error' in s) return s.error;
   const prefix = prefixOf(s.instituteId);
-  const { data, error } = await s.admin.storage
-    .from(BUCKET)
-    .list(prefix.slice(0, -1), { limit: 200, sortBy: { column: 'created_at', order: 'desc' } });
-  if (error) return NextResponse.json({ error: error.message }, { status: 502 });
-  const items: CoverAsset[] = (data ?? [])
-    .filter((f) => f.name && !f.name.startsWith('.') && f.id) // 폴더 placeholder 제외
-    .map((f) => {
-      const path = prefix + f.name;
-      const { data: u } = s.admin.storage.from(BUCKET).getPublicUrl(path);
-      // 파일명 = `{ts}-{원래이름}` — 표시용 이름은 ts 를 뗀다
-      const name = f.name.replace(/^\d{13}-/, '').replace(/\.(webp|png|jpe?g)$/i, '');
-      return {
-        name,
-        path,
-        url: u?.publicUrl ?? '',
-        size: (f.metadata as { size?: number } | null)?.size ?? 0,
-        createdAt: f.created_at ?? null,
-      };
-    });
+  const listImages = async (pfx: string, shared: boolean): Promise<CoverAsset[] | { error: string }> => {
+    const { data, error } = await s.admin.storage
+      .from(BUCKET)
+      .list(pfx.slice(0, -1), { limit: 200, sortBy: { column: 'created_at', order: 'desc' } });
+    if (error) return { error: error.message };
+    return (data ?? [])
+      .filter((f) => f.name && !f.name.startsWith('.') && f.id) // 폴더 placeholder 제외
+      .map((f) => {
+        const path = pfx + f.name;
+        const { data: u } = s.admin.storage.from(BUCKET).getPublicUrl(path);
+        // 파일명 = `{ts}-{원래이름}` — 표시용 이름은 ts 를 뗀다
+        const name = f.name.replace(/^\d{13}-/, '').replace(/\.(webp|png|jpe?g)$/i, '');
+        return {
+          name,
+          path,
+          url: u?.publicUrl ?? '',
+          size: (f.metadata as { size?: number } | null)?.size ?? 0,
+          createdAt: f.created_at ?? null,
+          ...(shared ? { shared: true } : {}),
+        };
+      });
+  };
+  const own = await listImages(prefix, false);
+  if ('error' in own) return NextResponse.json({ error: own.error }, { status: 502 });
+  const common = await listImages(COMMON_PREFIX, true);
+  // 센터 것 먼저, 공용은 뒤 — 공용 폴더 조회 실패는 센터 목록을 막지 않는다
+  const items: CoverAsset[] = [...own, ...('error' in common ? [] : common)];
   // 저장한 표지 목록 — templates/ 폴더의 JSON
   const templates: CoverTemplate[] = [];
   const { data: tplFiles } = await s.admin.storage
