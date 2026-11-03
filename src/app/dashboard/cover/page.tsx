@@ -124,7 +124,8 @@ export default function CoverMakerPage() {
 
       {/* 인쇄 — ExamPaperView 의 표지 인쇄 규칙과 같다 (전면 이미지, 패딩 0, A4 한 장) */}
       <style jsx global>{`
-        .exam-page.exam-cover img { max-height: none; height: 100%; object-fit: cover; object-position: center top; }
+        .exam-page.exam-cover img:not([data-fill]) { max-height: none; height: 100%; object-fit: cover; object-position: center top; }
+        .exam-page.exam-cover img[data-fill] { max-height: none !important; width: 100% !important; height: 100% !important; object-fit: fill !important; }
         #exam-print-root { display: none; }
         @media print {
           body > *:not(#exam-print-root) { display: none !important; }
@@ -136,7 +137,8 @@ export default function CoverMakerPage() {
             overflow: hidden !important; background: white !important;
             -webkit-print-color-adjust: exact; print-color-adjust: exact;
           }
-          #exam-print-root .exam-page.exam-cover img { max-height: none !important; height: 100% !important; object-fit: cover !important; object-position: center top !important; }
+          #exam-print-root .exam-page.exam-cover img:not([data-fill]) { max-height: none !important; height: 100% !important; object-fit: cover !important; object-position: center top !important; }
+          #exam-print-root .exam-page.exam-cover img[data-fill] { max-height: none !important; width: 100% !important; height: 100% !important; object-fit: fill !important; }
           @page { size: A4 portrait; margin: 0; }
         }
       `}</style>
