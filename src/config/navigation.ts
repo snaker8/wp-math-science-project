@@ -357,9 +357,15 @@ export const topNavGroups: NavGroup[] = [
       //   라우트·화면은 그대로(설계서 §6: 라우트는 남긴다). 「새 시험지 만들기」의 유형별 카드와 대시보드 바로가기로는 계속 열린다.
       tutor('/dashboard/curation'),        // AI 자동 출제
       dash('/dashboard/exam-management'),  // 자산 시험지 출제 (자산화 시험지 인쇄·배포)
-      dash('/dashboard/cover'),            // 표지 만들기 (시험지 없이 표지만)
       tutor('/dashboard/assignments'),     // 출제 관리 (학생별 출제 현황·점수)
     ],
+  },
+  // ── 표지 — 시험지와 별개로 표지만 만들어 쓰는 곳. 대표 「아예 따로 메뉴에, 완전 시험지와 별개로도 제작해서」(2026-11-03). 직접 링크. ──
+  {
+    id: 'cover',
+    label: '표지',
+    icon: ImageIcon,
+    href: '/dashboard/cover',
   },
   // ── 3) ★ 수업(학생) — 한 학생을 한 곳에서 (매쓰플랫 "수업" 미러).
   //   수업 홈(/dashboard/class) = 허브 — 학생 선택 시 보고서·진단·공유 한 화면. ──
