@@ -22,7 +22,9 @@ const MAX_W = 2480; // A4 @300dpi 가로. 더 크면 줄인다 — 인쇄엔 충
 function prefixOf(instituteId: string) {
   return `uploads/covers/${instituteId}/`;
 }
-/** 공용 표지 — 모든 센터 목록에 같이 보인다. 센터 화면에선 읽기만 (올리기·지우기는 운영자가 직접) (2026-11-02) */
+/** 공용 표지 — 모든 센터 목록에 같이 보인다. 센터 직원은 읽기만.
+ *  ★ 운영자(super_admin)가 올린 이미지는 기본으로 여기 들어간다 — 대표 「앞으로 내가 올리면 공용으로」(2026-11-03).
+ *    지우기도 운영자만. 저장한 표지(JSON)는 종전대로 활성 센터 폴더. */
 const COMMON_PREFIX = 'uploads/covers/common/';
 
 async function scope() {
@@ -35,7 +37,7 @@ async function scope() {
   if (!instituteId) {
     return { error: NextResponse.json({ error: '활성 센터가 없습니다' }, { status: 400 }) } as const;
   }
-  return { instituteId, admin: supabaseAdmin } as const;
+  return { instituteId, admin: supabaseAdmin, isSuperAdmin: authed.data.scope.isSuperAdmin } as const;
 }
 
 export type CoverAsset = { name: string; path: string; url: string; size: number; createdAt: string | null; shared?: boolean };
@@ -90,7 +92,7 @@ export async function GET() {
       templates.push({ name: json.name || f.name.replace(/^\d{13}-/, '').replace(/\.json$/, ''), path, settings: json.settings || {}, createdAt: f.created_at ?? null });
     } catch { /* 깨진 파일은 건너뜀 */ }
   }
-  return NextResponse.json({ items, templates });
+  return NextResponse.json({ items, templates, canManageShared: s.isSuperAdmin });
 }
 
 /** POST — 표지 이미지 추가 { base64, name } → 2480px 이하 WebP 로 정규화해 저장 */
@@ -132,22 +134,24 @@ export async function POST(req: NextRequest) {
   }
   // ★ Storage 키는 ASCII 만 — 한글 파일명("테스트 표지.png")은 Storage 가 400 Invalid key 로 거부한다(실측 09-19).
   const safe = (body.name || 'cover').replace(/\.[a-z0-9]+$/i, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'cover';
-  const path = `${prefixOf(s.instituteId)}${Date.now()}-${safe}.webp`;
+  const shared = s.isSuperAdmin; // 운영자가 올린 표지 = 공용
+  const path = `${shared ? COMMON_PREFIX : prefixOf(s.instituteId)}${Date.now()}-${safe}.webp`;
   const { error } = await s.admin.storage.from(BUCKET).upload(path, out, { contentType: 'image/webp', upsert: false });
   if (error) return NextResponse.json({ error: 'Storage upload failed', message: error.message }, { status: 502 });
   const { data: u } = s.admin.storage.from(BUCKET).getPublicUrl(path);
-  const item: CoverAsset = { name: safe, path, url: u?.publicUrl ?? '', size: out.length, createdAt: new Date().toISOString() };
+  const item: CoverAsset = { name: safe, path, url: u?.publicUrl ?? '', size: out.length, createdAt: new Date().toISOString(), ...(shared ? { shared: true } : {}) };
   return NextResponse.json({ item, width, height });
 }
 
-/** DELETE — { path } 이 센터 폴더 안의 것만 */
+/** DELETE — { path } 이 센터 폴더 안의 것만 (공용 폴더는 운영자만) */
 export async function DELETE(req: NextRequest) {
   const s = await scope();
   if ('error' in s) return s.error;
   let body: { path?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const path = body.path || '';
-  if (!path.startsWith(prefixOf(s.instituteId)) || path.includes('..')) {
+  const allowed = path.startsWith(prefixOf(s.instituteId)) || (s.isSuperAdmin && path.startsWith(COMMON_PREFIX) && !path.slice(COMMON_PREFIX.length).includes('/'));
+  if (!allowed || path.includes('..')) {
     return NextResponse.json({ error: '이 센터의 표지가 아닙니다' }, { status: 400 });
   }
   const { error } = await s.admin.storage.from(BUCKET).remove([path]);

@@ -11,6 +11,7 @@
 // 인쇄: `.exam-page.exam-cover` — 패딩 0(전면 이미지). ExamPaperView 의 @media print 에서 예외 처리.
 import React, { useEffect, useRef, useState } from 'react';
 import type { ExamMeta } from '@/config/exam-templates';
+import { coverLayoutFor, COVER_FONT_FAMILY, COVER_FONT_HREF, type CoverEl } from './cover-layouts';
 
 export type CoverDesign = 'minimal' | 'classic' | 'band' | 'grid' | 'image-band' | 'image-full';
 
@@ -110,6 +111,8 @@ export function CoverPage({
     color: '#0f172a',
   };
   const PADX = 64; const PADY = 72;
+  /** 공용 표지 이미지면 그 그림의 빈 자리 (없으면 null → 아래 띠) */
+  const slot = settings.design === 'image-full' ? coverLayoutFor(settings.imageUrl) : null;
 
   let body: React.ReactNode;
   switch (settings.design) {
@@ -180,10 +183,56 @@ export function CoverPage({
         <>
           <div style={{ position: 'absolute', inset: 0, background: '#f1f5f9' }}>
             {settings.imageUrl
-              ? <img src={settings.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block', maxHeight: 'none' }} />
+              ? <img src={settings.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: slot && settings.overlay ? 'fill' : 'cover', objectPosition: 'center top', display: 'block', maxHeight: 'none' }} data-fill={slot && settings.overlay ? '1' : undefined} />
               : <Placeholder />}
           </div>
-          {settings.overlay && (
+          {settings.overlay && slot && (() => {
+            // ★ 원본 표지의 글자 자리·색·크기·글꼴 그대로 (cover-layouts.ts) — 띠로 그림을 덮지 않는다
+            const infoText = infoOverride || info.map(([, v]) => v).join(' · ');
+            const textOf = (el: CoverEl): string => {
+              switch (el.field) {
+                case 'title': return examTitle;
+                case 'subtitle': return subtitle;
+                case 'info': return infoText;
+                case 'academy': return academy;
+                case 'note': return settings.note.trim();
+                default: return el.text || '';
+              }
+            };
+            return (
+              <>
+                <link rel="stylesheet" href={COVER_FONT_HREF} />
+                {slot.card && (
+                  <div style={{ position: 'absolute', left: `${slot.card.x}%`, top: `${slot.card.y}%`, width: `${slot.card.w}%`, height: `${slot.card.h}%`,
+                    background: 'rgba(255,255,255,.94)', border: `3px solid ${slot.card.border}`, borderRadius: 999, boxShadow: '0 4px 18px rgba(0,0,0,.08)' }} />
+                )}
+                {slot.els.map((el, i) => {
+                  const t = textOf(el);
+                  if (!t) return null;
+                  const pos: React.CSSProperties = el.anchor === 'right'
+                    ? { right: `${100 - el.x}%`, textAlign: 'right' }
+                    : el.anchor === 'center'
+                      ? { left: `${el.x}%`, transform: 'translateX(-50%)', textAlign: 'center' }
+                      : { left: `${el.x}%`, textAlign: 'left' };
+                  return (
+                    <div key={i} style={{
+                      position: 'absolute', top: `${el.y}%`, ...pos,
+                      ...(el.w ? { width: `${el.w}%` } : { whiteSpace: 'nowrap' }),
+                      fontSize: el.size, fontWeight: el.weight, color: el.color, letterSpacing: el.ls, lineHeight: el.lh ?? 1.25,
+                      fontFamily: el.font ? COVER_FONT_FAMILY[el.font] : undefined, wordBreak: 'keep-all', whiteSpace: el.w ? 'pre-wrap' : 'nowrap',
+                      ...(el.vertical ? { writingMode: 'vertical-rl', textOrientation: 'upright', width: 'auto' } : {}),
+                      ...(el.stroke ? { WebkitTextStroke: `6px ${el.stroke}`, paintOrder: 'stroke fill' } : {}),
+                    }}>
+                      {el.bar || el.chip
+                        ? <span style={{ display: el.bar ? 'block' : 'inline-block', background: el.bar || el.chip, padding: el.bar ? '3px 10px' : '4px 12px', borderRadius: el.chip ? 4 : 0, textAlign: el.bar ? 'center' : undefined }}>{t}</span>
+                        : t}
+                    </div>
+                  );
+                })}
+              </>
+            );
+          })()}
+          {settings.overlay && !slot && (
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,.72)', color: '#fff', padding: `28px ${PADX}px 40px`, display: 'grid', gap: 14 }}>
               <div>
                 {academy && <div style={{ fontSize: 12, letterSpacing: '.2em', opacity: .85, marginBottom: 8 }}>{academy}</div>}
@@ -228,6 +277,8 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
   // ★ 저장한 표지 — 시험지와 무관한 표지 묶음(디자인·이미지·제목·부제목·학원명·안내문). 센터 라이브러리에 JSON 으로.
   const [templates, setTemplates] = useState<CoverTemplate[] | null>(null);
   const [tplName, setTplName] = useState('');
+  /** 운영자(super_admin) — 올린 이미지가 공용으로 가고, 공용 표지도 지울 수 있다 */
+  const [canManageShared, setCanManageShared] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -240,6 +291,7 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
       if (!r.ok) throw new Error(j.error || r.statusText);
       setItems(j.items as CoverAsset[]);
       setTemplates((j.templates as CoverTemplate[]) ?? []);
+      setCanManageShared(j.canManageShared === true);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setItems([]); setTemplates([]); }
   };
   useEffect(() => { if (items === null) void load(); }, [items]);
@@ -338,7 +390,7 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
       {isImage && (
         <div className="flex flex-col gap-2 rounded-lg border border-white/10 p-2">
           <div className="flex items-center justify-between">
-            <span className="text-content-secondary">표지 이미지 — 이 센터 라이브러리</span>
+            <span className="text-content-secondary">{canManageShared ? '표지 이미지 — 올리면 모든 센터 공용' : '표지 이미지 — 이 센터 라이브러리'}</span>
             <label className="cursor-pointer rounded-md bg-white px-2 py-1 font-semibold text-black hover:bg-white/90">
               {busy && !busy.startsWith('del:') ? busy : '이미지 올리기'}
               <input ref={fileRef} type="file" accept="image/*" className="hidden" disabled={!!busy && !busy.startsWith('del:')}
@@ -363,8 +415,8 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={it.url} alt={it.name} className="h-full w-full object-cover" loading="lazy" />
                   </button>
-                  {/* 공용 표지는 센터에서 못 지운다 (서버도 이 센터 폴더만 허용) */}
-                  {!it.shared && (
+                  {/* 공용 표지는 센터에서 못 지운다 (서버도 이 센터 폴더만 허용) — 운영자만 지움 */}
+                  {(!it.shared || canManageShared) && (
                     <button type="button" onClick={() => void remove(it)} title={arming ? '한 번 더 누르면 삭제' : '삭제'}
                       className={`absolute right-1 top-1 rounded px-1 text-[10px] leading-4 ${arming ? 'bg-red-500 text-white' : 'bg-black/70 text-white opacity-0 group-hover:opacity-100'}`}>
                       {arming ? '삭제?' : '×'}

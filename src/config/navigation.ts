@@ -85,6 +85,14 @@ export const dashboardNavItems: NavItem[] = [
     group: 'main',
   },
   {
+    // ★ 2026-11-03 대표 「표지만 따로 만들어 쓸 수 있게」 — 시험지 없이 표지 한 장(인쇄·PDF). 저장한 표지는 시험지 화면과 공유.
+    href: '/dashboard/cover',
+    icon: ImageIcon,
+    label: '표지 만들기',
+    description: '시험지 없이 표지만 꾸며 인쇄·PDF',
+    group: 'main',
+  },
+  {
     href: '/dashboard/materials',
     icon: BookOpen,
     label: '학원자료',
@@ -349,6 +357,7 @@ export const topNavGroups: NavGroup[] = [
       //   라우트·화면은 그대로(설계서 §6: 라우트는 남긴다). 「새 시험지 만들기」의 유형별 카드와 대시보드 바로가기로는 계속 열린다.
       tutor('/dashboard/curation'),        // AI 자동 출제
       dash('/dashboard/exam-management'),  // 자산 시험지 출제 (자산화 시험지 인쇄·배포)
+      dash('/dashboard/cover'),            // 표지 만들기 (시험지 없이 표지만)
       tutor('/dashboard/assignments'),     // 출제 관리 (학생별 출제 현황·점수)
     ],
   },
