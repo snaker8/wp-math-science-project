@@ -280,5 +280,12 @@ export default async function SharedExamReportPage({
     }
   } catch { isOperator = false; }
 
+  // ★ 로컬 개발 전용 운영자 도구 강제 (2026-10-14) — 블로그 게시 자동화가 섹션 복사 버튼을 눌러야 하는데
+  //   배포본은 로그인 세션이 없으면 버튼이 숨는다(위 게이트). 프로덕션 빌드는 NODE_ENV=production 이라
+  //   이 분기 자체가 성립하지 않고, 추가로 서버 전용 env 플래그를 명시해야만 켜진다. 배포 영향 없음.
+  if (!isOperator && process.env.NODE_ENV === 'development' && process.env.SHARE_REPORT_DEV_OPERATOR === '1') {
+    isOperator = true;
+  }
+
   return <ShareReportClient data={data} domainLabels={DOMAIN_LABELS} brand={data.brand} isOperator={isOperator} />;
 }

@@ -575,7 +575,7 @@ export async function GET(request: NextRequest) {
     narrative.push({
       heading: '이번 분석의 한 줄 요약',
       paragraphs: [
-        `${yearLabel}${subjLabel}${semLabel}${typeLabel}를 ${totalSchools}개 학교 ${matchedExams.length}건 시험지(총 ${totalProblems}문항) 단위로 비교했습니다. ${
+        `${yearLabel}${subjLabel}${semLabel}${typeLabel}${typeLabel.endsWith("시험") ? "을" : "를"} ${totalSchools}개 학교 ${matchedExams.length}건 시험지(총 ${totalProblems}문항) 단위로 비교했습니다. ${
           classifiedProblems === totalProblems
             ? '모든 문항이 단원·난이도 분류 완료'
             : `${classifiedProblems}/${totalProblems}문항 분류 완료`
