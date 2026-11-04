@@ -25,6 +25,7 @@ import { resolveExamGrade } from '@/lib/workflow/exam-grade';
 import type { ExamAIAnalysis, GenerateAnalysisOptions } from '@/types/exam-ai-analysis';
 import { verifyAndFixStrategy } from '@/lib/ai/strategy-verify';
 import { readFigureFacts } from '@/lib/vision/image-redraw';
+import { normalizeImageForVision } from '@/lib/claude/image-normalize';
 
 // 분석은 Claude Sonnet 응답 + 길어서 5분
 export const maxDuration = 300;
@@ -312,8 +313,8 @@ export async function POST(
           if (res.ok) { buf = await res.arrayBuffer(); mediaType = res.headers.get('content-type')?.split(';')[0] || mediaType; }
         }
         if (!buf || buf.byteLength > 4 * 1024 * 1024) return null;
-        if (!/^image\/(png|jpeg|webp|gif)$/.test(mediaType)) mediaType = 'image/png';
-        return { mediaType, data: Buffer.from(buf).toString('base64') };
+        // ★ BMP(수학비서 HML 그림) 를 image/png 라고 보내면 Claude 가 400 (2026-11-04 해운대고 13번) → 실제 포맷 판독·PNG 변환
+        return normalizeImageForVision(Buffer.from(buf), mediaType);
       } catch { return null; }
     };
     // ★ 2026-10-13 사고: `difficulty >= hardThreshold(7)` 로 걸러 중1 시험지(난이도 2~6)는 그림이 0장 — 생성·검산이 전부 글만 보고 돌았다.
