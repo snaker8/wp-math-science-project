@@ -25,9 +25,14 @@ import {
   Pin,
   Target,
   Lightbulb,
+  Check,
+  ListChecks,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { useSmartBack } from '@/lib/navigation/useSmartBack';
+import { AggregateResults, type AggregateResponse } from '@/components/reports/AggregateResults';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 
 interface ExamRow {
@@ -122,6 +127,40 @@ export default function SchoolReportPage() {
   const [query, setQuery] = useState('');
   const [yearFilter, setYearFilter] = useState<'all' | number>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // ★ 시험지 선택 → 그 묶음만 집계 분석 (2026-11-04 대표: "학교 내에서도 시험지별로 선택해서 분석")
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [agg, setAgg] = useState<AggregateResponse | null>(null);
+  const [aggIds, setAggIds] = useState<string[]>([]); // 결과가 어떤 선택으로 만들어졌는지 (공유 링크·"선택 바뀜" 판정)
+  const [aggLoading, setAggLoading] = useState(false);
+  const [aggError, setAggError] = useState<string | null>(null);
+  const [aggCopied, setAggCopied] = useState(false);
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const runAggregate = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setAggLoading(true);
+    setAggError(null);
+    try {
+      const r = await fetch(`/api/reports/aggregate?examIds=${ids.join(',')}`, { cache: 'no-store' });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        setAggError(d?.detail || d?.error || `집계에 실패했습니다 (${r.status})`);
+        return;
+      }
+      setAgg((await r.json()) as AggregateResponse);
+      setAggIds(ids);
+      // 결과는 목록 아래에 붙으니 거기로 내려 준다
+      setTimeout(() => document.getElementById('selected-aggregate')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+    } catch (e) {
+      setAggError(e instanceof Error ? `네트워크 오류: ${e.message}` : '네트워크 오류로 집계하지 못했습니다');
+    } finally {
+      setAggLoading(false);
+    }
+  };
+  const aggShareQuery = aggIds.length ? `examIds=${aggIds.join(',')}` : null;
+  const aggDirty = agg != null && (aggIds.length !== selected.size || aggIds.some((id) => !selected.has(id)));
 
   useEffect(() => {
     if (!schoolParam) return;
@@ -418,10 +457,66 @@ export default function SchoolReportPage() {
             )}
           </div>
 
+          {/* 시험지 선택 → 묶음 집계 */}
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-white/[.08] bg-white/[.03] px-3 py-2">
+            <ListChecks className="h-3.5 w-3.5 text-content-tertiary" />
+            <span className="text-xs text-zinc-300 tabular-nums">
+              선택 <span className="font-semibold text-white">{selected.size}</span>건
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelected(new Set(filteredExams.map((e) => e.id)))}
+              disabled={filteredExams.length === 0}
+              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300 hover:text-white disabled:opacity-40"
+            >
+              보이는 {filteredExams.length}건 모두 선택
+            </button>
+            {selected.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-400 hover:text-white"
+              >
+                선택 해제
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={runAggregate}
+              disabled={selected.size === 0 || aggLoading}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-black hover:bg-zinc-200 disabled:opacity-40"
+            >
+              {aggLoading && <span className="h-3 w-3 animate-spin rounded-full border-2 border-black/30 border-t-black" />}
+              {aggLoading ? '집계 중...' : aggDirty ? '바뀐 선택으로 다시 분석' : '선택 시험지 집계 분석'}
+            </button>
+            {aggError && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-content-primary">
+                <AlertTriangle className="h-3 w-3" />
+                {aggError}
+              </span>
+            )}
+          </div>
+
           <div className="overflow-hidden rounded-lg border border-zinc-800">
             <table className="w-full text-xs">
               <thead className="bg-zinc-900/60 text-zinc-400">
                 <tr>
+                  <th className="w-8 px-2 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="보이는 시험지 모두 선택"
+                      className="h-3.5 w-3.5 cursor-pointer accent-white"
+                      checked={filteredExams.length > 0 && filteredExams.every((e) => selected.has(e.id))}
+                      onChange={(ev) => {
+                        const ids = filteredExams.map((e) => e.id);
+                        setSelected((prev) => {
+                          const n = new Set(prev);
+                          ids.forEach((id) => (ev.target.checked ? n.add(id) : n.delete(id)));
+                          return n;
+                        });
+                      }}
+                    />
+                  </th>
                   <th className="w-8 px-2 py-2"></th>
                   <th className="px-3 py-2 text-left">제목</th>
                   <th className="px-3 py-2 text-left">학년</th>
@@ -437,7 +532,7 @@ export default function SchoolReportPage() {
               <tbody>
                 {filteredExams.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-zinc-500">
+                    <td colSpan={11} className="px-3 py-8 text-center text-zinc-500">
                       조건에 맞는 시험지가 없습니다
                     </td>
                   </tr>
@@ -466,6 +561,15 @@ export default function SchoolReportPage() {
                           }
                         }}
                       >
+                        <td className="px-2 py-2 text-center" onClick={(ev) => ev.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`${e.title} 선택`}
+                            className="h-3.5 w-3.5 cursor-pointer accent-white"
+                            checked={selected.has(e.id)}
+                            onChange={() => toggleSelect(e.id)}
+                          />
+                        </td>
                         <td className="px-2 py-2 text-center text-zinc-500">
                           {e.hasAnalysis ? (
                             expanded ? (
@@ -540,7 +644,7 @@ export default function SchoolReportPage() {
                       <AnimatePresence initial={false}>
                         {expanded && e.analysis && (
                           <tr className="border-t border-zinc-800/40 bg-zinc-950/60">
-                            <td colSpan={10} className="p-0">
+                            <td colSpan={11} className="p-0">
                               <motion.div
                                 key="expand"
                                 initial={{ height: 0, opacity: 0 }}
@@ -564,6 +668,60 @@ export default function SchoolReportPage() {
             </table>
           </div>
         </Panel>
+
+        {/* 선택 시험지 집계 결과 */}
+        {(agg || aggLoading) && (
+          <div id="selected-aggregate" className={`transition-opacity ${aggLoading && agg ? 'pointer-events-none opacity-50' : ''} ${aggDirty ? 'opacity-70' : ''}`} aria-busy={aggLoading}>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+                <BarChart3 className="h-4 w-4 text-content-tertiary" />
+                선택 시험지 집계 분석
+                {agg && <span className="text-xs font-normal text-zinc-400 tabular-nums">시험지 {fmt(aggIds.length)}건</span>}
+              </h2>
+              {aggDirty && (
+                <span className="inline-flex items-center gap-1 rounded-md border border-white/[.14] bg-white/[.06] px-2 py-1 text-[11px] text-content-primary">
+                  <RefreshCw className="h-3 w-3" />
+                  선택이 바뀌었습니다. 아래 결과는 이전 선택입니다.
+                </span>
+              )}
+              {agg && aggShareQuery && agg.matched.examCount > 0 && (
+                <a
+                  href={`/share/aggregate?${aggShareQuery}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(`${window.location.origin}/share/aggregate?${aggShareQuery}`);
+                      setAggCopied(true);
+                      setTimeout(() => setAggCopied(false), 2200);
+                    } catch { /* 새 탭은 anchor 가 연다 */ }
+                  }}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-white/[.08] bg-white/[.04] px-3 py-1.5 text-xs font-bold text-content-secondary hover:bg-white/[.06] hover:text-content-primary"
+                  title="새 탭에서 학부모 공유 페이지를 엽니다 (링크도 자동 복사)"
+                >
+                  {aggCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
+                  {aggCopied ? '링크 복사됨' : '학부모 공유 페이지'}
+                </a>
+              )}
+            </div>
+            {agg && agg.matched.examCount > 0 ? (
+              <AggregateResults key={aggIds.join(',')} data={agg} />
+            ) : agg ? (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-center text-zinc-400">
+                선택한 시험지에서 집계할 문항이 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-4" aria-label="집계 중">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-[88px] animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+                  ))}
+                </div>
+                <div className="h-40 animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     </div>
     </MotionConfig>
