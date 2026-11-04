@@ -18,7 +18,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter } from '@/lib/security/institute-guard';
-import { extractSchoolName } from '@/lib/utils/school-extract';
+import { resolveSchoolName } from '@/lib/utils/school-extract';
+import { schoolNameVariants } from '@/lib/utils/school-normalize';
 import { extractExamYear } from '@/lib/utils/year-extract';
 import { extractSemester, extractExamType } from '@/lib/utils/exam-meta-extract';
 import { DIFFICULTY_BANDS, difficultyToBand } from '@/lib/utils/difficulty-label';
@@ -120,11 +121,21 @@ export async function GET(request: NextRequest) {
   //   nested join 이 무거워 한 페이지 200장.
   const PAGE = 200;
   const examsRaw: unknown[] = [];
+  // ★ 학교를 골랐으면 학교명 변형들로 DB 사전 필터 (2026-11-04 감사 B14 — 전체 2,474장 nested join 을 매번 받던 것)
+  const schoolPrefilter = filterSchools
+    ? filterSchools
+        .flatMap((s) => schoolNameVariants(s))
+        .map((v) => v.replace(/[,()%]/g, ''))
+        .filter(Boolean)
+        .flatMap((v) => [`school_name.ilike.%${v}%`, `title.ilike.%${v}%`])
+        .join(',')
+    : null;
   for (let from = 0; ; from += PAGE) {
     let query = supabaseAdmin
       .from('exams')
       .select(`
         id, title, grade, subject, ai_analysis, share_token, created_at,
+        school_name, exam_year, semester, exam_round, exam_type,
         exam_problems(
           problem_id,
           problems(
@@ -139,6 +150,7 @@ export async function GET(request: NextRequest) {
     // ★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지, isolated org 만 격리
     query = applyInstituteFilter(query, scope, { allowCommonPool: true });
     if (filterGrade) query = query.eq('grade', filterGrade);
+    if (schoolPrefilter) query = query.or(schoolPrefilter);
 
     const { data: page, error: examsErr } = await query.range(from, from + PAGE - 1);
     if (examsErr) {
@@ -157,6 +169,11 @@ export async function GET(request: NextRequest) {
     ai_analysis: Record<string, unknown> | null;
     share_token: string | null;
     created_at: string | null;
+    school_name: string | null;
+    exam_year: number | null;
+    semester: number | null;
+    exam_round: string | null;
+    exam_type: string | null;
     exam_problems: Array<{
       problem_id: string;
       // Supabase 관계 inference 가 array 로 반환 (FK 측 1행이라도)
@@ -165,20 +182,30 @@ export async function GET(request: NextRequest) {
         problem_pitfalls: Array<{ pitfall_code: string | null }> | null;
       }> | null;
     }>;
+    /** ★ 2026-11-04: 학교·년도·학기·구분은 DB 컬럼 우선, 제목 파싱은 보조 (by-school·[school] 과 같은 판정) */
+    meta: { school: string | null; year: number | null; semester: 1 | 2 | null; examType: string | null };
   };
 
-  const allExams = (examsRaw || []) as unknown as ExamFetch[];
+  const allExams = ((examsRaw || []) as unknown as Omit<ExamFetch, 'meta'>[]).map((e): ExamFetch => ({
+    ...e,
+    meta: {
+      school: e.exam_type === '모의고사' ? null : resolveSchoolName(e),
+      year: e.exam_year ?? extractExamYear(e.title, e.created_at),
+      semester: (e.semester === 1 || e.semester === 2 ? e.semester : null) ?? extractSemester(e.title),
+      examType: e.exam_round || extractExamType(e.title),
+    },
+  }));
 
   // ─────────────────────────────────────────────────────────────────────
   // 2) 클라이언트 사이드 필터링 (title 파싱 — year/semester/examType/school)
   // ─────────────────────────────────────────────────────────────────────
   const matchedExams: ExamFetch[] = allExams.filter((e) => {
-    const school = extractSchoolName(e.title);
+    const school = e.meta.school;
     if (!school) return false;
     if (filterSchools && !filterSchools.includes(school)) return false;
-    if (filterYear != null && extractExamYear(e.title, e.created_at) !== filterYear) return false;
-    if (filterSemester != null && extractSemester(e.title) !== filterSemester) return false;
-    if (filterExamType != null && extractExamType(e.title) !== filterExamType) return false;
+    if (filterYear != null && e.meta.year !== filterYear) return false;
+    if (filterSemester != null && e.meta.semester !== filterSemester) return false;
+    if (filterExamType != null && e.meta.examType !== filterExamType) return false;
     return true;
   });
 
@@ -238,7 +265,7 @@ export async function GET(request: NextRequest) {
   const examRows: ExamRow[] = [];
 
   for (const e of matchedExams) {
-    const school = extractSchoolName(e.title)!;
+    const school = e.meta.school!;
     const ai = e.ai_analysis;
     const hasAnalysis = !!(ai && typeof ai === 'object' && 'generatedAt' in ai);
     if (hasAnalysis) analyzedExamCount++;
@@ -333,9 +360,9 @@ export async function GET(request: NextRequest) {
       id: e.id,
       title: e.title,
       school,
-      year: extractExamYear(e.title, e.created_at),
-      semester: extractSemester(e.title),
-      examType: extractExamType(e.title),
+      year: e.meta.year,
+      semester: e.meta.semester,
+      examType: e.meta.examType,
       problemCount: examProblemCount,
       classifiedCount: examClassified,
       avgDifficulty: examAvg,
@@ -401,7 +428,7 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.problemCount - a.problemCount);
 
   // 매칭 학교 set
-  const matchedSchools = new Set(matchedExams.map((e) => extractSchoolName(e.title)!));
+  const matchedSchools = new Set(matchedExams.map((e) => e.meta.school!));
 
   // 그룹 전체 평균 = 매칭 시험지들의 평균값들의 평균 (시험지 등가중)
   const overall = stat(allExamAvgs);
@@ -412,7 +439,8 @@ export async function GET(request: NextRequest) {
   const totalSchools = matchedSchools.size;
   const unitCommon: UnitRow[] = [];
   const unitUnique: UnitRow[] = [];
-  if (totalSchools > 0) {
+  // ★ 학교 3곳 미만이면 비율 기준이 무의미(1곳=전부 공통, 2곳=대부분 어느 쪽도 아님) → 비워 두고 화면이 안내 (2026-11-04 B13)
+  if (totalSchools >= 3) {
     for (const u of unitFrequency) {
       const ratio = u.schoolCount / totalSchools;
       if (ratio >= 0.8) unitCommon.push(u);
@@ -425,11 +453,11 @@ export async function GET(request: NextRequest) {
   // trendBase = school+semester+examType 매칭 (year 무시)
   // ─────────────────────────────────────────────────────────────────────
   const trendBase = allExams.filter((e) => {
-    const school = extractSchoolName(e.title);
+    const school = e.meta.school;
     if (!school) return false;
     if (filterSchools && !filterSchools.includes(school)) return false;
-    if (filterSemester != null && extractSemester(e.title) !== filterSemester) return false;
-    if (filterExamType != null && extractExamType(e.title) !== filterExamType) return false;
+    if (filterSemester != null && e.meta.semester !== filterSemester) return false;
+    if (filterExamType != null && e.meta.examType !== filterExamType) return false;
     return true;
   });
 
@@ -442,10 +470,10 @@ export async function GET(request: NextRequest) {
   >();
 
   for (const e of trendBase) {
-    const yr = extractExamYear(e.title, e.created_at);
+    const yr = e.meta.year;
     if (yr == null) continue;
     trendYearSet.add(yr);
-    const school = extractSchoolName(e.title)!;
+    const school = e.meta.school!;
     for (const ep of e.exam_problems || []) {
       const pArr = ep.problems;
       const p = Array.isArray(pArr) ? pArr[0] : pArr;
@@ -510,8 +538,8 @@ export async function GET(request: NextRequest) {
       return {
         examId: e.id,
         examTitle: e.title,
-        school: extractSchoolName(e.title)!,
-        year: extractExamYear(e.title, e.created_at),
+        school: e.meta.school!,
+        year: e.meta.year,
         summary: ai.summary ? ai.summary.slice(0, 400) : null,
         hardQuestions: hardQs,
         generatedAt: ai.generatedAt || null,
@@ -529,12 +557,15 @@ export async function GET(request: NextRequest) {
   if (matchedExams.length > 0) {
     const subjLabel = filterGrade ? ` ${filterGrade}` : '';
     const semLabel = filterSemester ? ` ${filterSemester}학기` : '';
-    const typeLabel = filterExamType ? ` ${filterExamType}` : '';
+    // ★ "모의고사고사"·"1학기고사" 가 되던 것 (2026-11-04 B11) — 중간·기말만 "고사" 를 붙인다
+    const typeLabel = filterExamType
+      ? ` ${filterExamType === '중간' || filterExamType === '기말' ? `${filterExamType}고사` : filterExamType}`
+      : ' 시험';
     const yearLabel = filterYear ? `${filterYear}학년도` : '최근';
     narrative.push({
       heading: '이번 분석의 한 줄 요약',
       paragraphs: [
-        `${yearLabel}${subjLabel}${semLabel}${typeLabel}고사를 ${totalSchools}개 학교 ${matchedExams.length}건 시험지(총 ${totalProblems}문항) 단위로 비교했습니다. ${
+        `${yearLabel}${subjLabel}${semLabel}${typeLabel}를 ${totalSchools}개 학교 ${matchedExams.length}건 시험지(총 ${totalProblems}문항) 단위로 비교했습니다. ${
           classifiedProblems === totalProblems
             ? '모든 문항이 단원·난이도 분류 완료'
             : `${classifiedProblems}/${totalProblems}문항 분류 완료`
@@ -561,7 +592,7 @@ export async function GET(request: NextRequest) {
       heading: '평균 난이도와 해석',
       paragraphs: [
         `시험지 평균은 ${overall.avg.toFixed(2)}/10 (${band?.label ?? '-'})${
-          overall.std != null ? `, 학교 간 편차는 σ ${overall.std.toFixed(2)}` : ''
+          overall.std != null ? `, 시험지 간 편차는 σ ${overall.std.toFixed(2)}` : ''
         }로 집계되었습니다.`,
         interp,
       ],
