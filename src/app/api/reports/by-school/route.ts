@@ -37,15 +37,27 @@ export async function GET(_request: NextRequest) {
 
   // 시험지 + 분석/공유 상태 일괄 조회 (★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지)
   // ★ exams.problem_count 컬럼이 prod DB 에 없음 → exam_problems(count) 조인으로 derive (useExams.ts 동일 패턴)
-  const baseQ = supabaseAdmin
-    .from('exams')
-    .select('id, title, grade, subject, created_at, ai_analysis, share_token, exam_problems(count)')
-    .is('deleted_at', null);
-  const { data: exams, error } = await applyInstituteFilter(baseQ, scope, { allowCommonPool: true })
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ error: 'Fetch failed', detail: error.message }, { status: 500 });
+  // ★ Supabase 기본 1,000행 상한 → range 페이지네이션 (useExams 와 같은 패턴).
+  //   2026-11-04: 살아있는 시험지 2,474장 중 최신 1,000장만 집계돼 해운대고가 27장 중 4장으로 보이던 사고.
+  const PAGE = 500;
+  const exams: Array<{
+    id: string; title: string; grade: string | null; subject: string | null; created_at: string | null;
+    ai_analysis: unknown; share_token: string | null; exam_problems: Array<{ count: number }> | null;
+  }> = [];
+  for (let from = 0; ; from += PAGE) {
+    const baseQ = supabaseAdmin
+      .from('exams')
+      .select('id, title, grade, subject, created_at, ai_analysis, share_token, exam_problems(count)')
+      .is('deleted_at', null);
+    const { data: page, error } = await applyInstituteFilter(baseQ, scope, { allowCommonPool: true })
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      return NextResponse.json({ error: 'Fetch failed', detail: error.message }, { status: 500 });
+    }
+    if (!page || page.length === 0) break;
+    exams.push(...(page as typeof exams));
+    if (page.length < PAGE) break;
   }
 
   const bySchool = new Map<string, SchoolCard>();

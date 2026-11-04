@@ -116,28 +116,37 @@ export async function GET(request: NextRequest) {
   // ─────────────────────────────────────────────────────────────────────
   // 1) 시험지 + 분석/공유 + 문제 + 분류 + 함정 일괄 조회 (nested join)
   // ─────────────────────────────────────────────────────────────────────
-  let query = supabaseAdmin
-    .from('exams')
-    .select(`
-      id, title, grade, subject, ai_analysis, share_token, created_at,
-      exam_problems(
-        problem_id,
-        problems(
-          classifications(type_code, difficulty),
-          problem_pitfalls(pitfall_code)
+  // ★ Supabase 기본 1,000행 상한 → range 페이지네이션 (2026-11-04 by-school 과 같은 사고: 시험지 2,474장 중 최신 1,000장만 집계).
+  //   nested join 이 무거워 한 페이지 200장.
+  const PAGE = 200;
+  const examsRaw: unknown[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let query = supabaseAdmin
+      .from('exams')
+      .select(`
+        id, title, grade, subject, ai_analysis, share_token, created_at,
+        exam_problems(
+          problem_id,
+          problems(
+            classifications(type_code, difficulty),
+            problem_pitfalls(pitfall_code)
+          )
         )
-      )
-    `)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+      `)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
 
-  // ★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지, isolated org 만 격리
-  query = applyInstituteFilter(query, scope, { allowCommonPool: true });
-  if (filterGrade) query = query.eq('grade', filterGrade);
+    // ★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지, isolated org 만 격리
+    query = applyInstituteFilter(query, scope, { allowCommonPool: true });
+    if (filterGrade) query = query.eq('grade', filterGrade);
 
-  const { data: examsRaw, error: examsErr } = await query;
-  if (examsErr) {
-    return NextResponse.json({ error: 'Fetch failed', detail: examsErr.message }, { status: 500 });
+    const { data: page, error: examsErr } = await query.range(from, from + PAGE - 1);
+    if (examsErr) {
+      return NextResponse.json({ error: 'Fetch failed', detail: examsErr.message }, { status: 500 });
+    }
+    if (!page || page.length === 0) break;
+    examsRaw.push(...page);
+    if (page.length < PAGE) break;
   }
 
   type ExamFetch = {
