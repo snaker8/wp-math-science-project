@@ -447,7 +447,10 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
         if (colCount >= 3) {
           while (titleRows < el.rows.length - 1 && el.rows[titleRows][0]?.trim() && el.rows[titleRows].slice(1).every((c) => !c.trim())) titleRows++;
         }
-        const cellCls = colCount === 1 ? 'px-4 py-1 text-center' : 'px-3 py-1.5 text-center border border-gray-500';
+        // ★ 1열 박스에 긴 한글 문장(대화·설명)이 한 줄이라도 있으면 전부 왼쪽 정렬 — 짧은 줄(「학생 : (가)」)만 가운데로 떠서
+        //   줄마다 들쭉날쭉하던 것 (2026-11-04 온천중 25-1-2-F #22). 짧은 줄만 있는 자료 박스(독서 시간·단위·수열)는 종전 가운데.
+        const proseBox = colCount === 1 && el.rows.some((r) => /[가-힣]/.test(r[0] || "") && (r[0] || "").replace(/$[^$]*$/g, "").trim().length > 16);
+        const cellCls = colCount === 1 ? (proseBox ? "px-4 py-1 text-left" : "px-4 py-1 text-center") : "px-3 py-1.5 text-center border border-gray-500";
         return (
           <FitTable key={i}>
             <table className={`border-collapse mx-auto text-sm ${colCount === 1 ? 'border-2 border-gray-500' : ''}`} style={{ maxWidth: '100%' }}>
