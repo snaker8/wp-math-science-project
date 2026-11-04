@@ -213,6 +213,10 @@ function ShareAggregateContent() {
     data.filters.schools && data.filters.schools.length > 0
       ? `학교 ${m.schoolCount}곳`
       : null,
+    // 학교 상세에서 시험지를 직접 골라 만든 집계 (examIds)
+    (data.filters as { examIds?: string[] | null }).examIds?.length
+      ? `선택 시험지 ${m.examCount}건`
+      : null,
   ].filter(Boolean) as string[];
 
   return (

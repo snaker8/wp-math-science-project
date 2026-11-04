@@ -107,6 +107,15 @@ export async function GET(request: NextRequest) {
   const semesterParam = searchParams.get('semester');
   const examTypeParam = searchParams.get('examType');
   const schoolsParam = searchParams.get('schools');
+  // ★ 시험지 직접 선택 (2026-11-04 대표: "학교 내에서도 시험지별로 선택해서 분석") — 학교 상세에서 고른 ID 묶음.
+  //   있으면 그 시험지들만 집계 (다른 필터는 그대로 추가 적용). 최대 200장.
+  const examIdsParam = searchParams.get('examIds');
+  const filterExamIds = examIdsParam
+    ? Array.from(new Set(examIdsParam.split(',').map((s) => s.trim()).filter((s) => /^[0-9a-f-]{36}$/i.test(s)))).slice(0, 200)
+    : null;
+  if (examIdsParam && (!filterExamIds || filterExamIds.length === 0)) {
+    return NextResponse.json({ error: 'Invalid examIds' }, { status: 400 });
+  }
 
   const filterYear = yearParam ? parseInt(yearParam, 10) : null;
   const filterGrade = gradeParam || null;
@@ -150,7 +159,8 @@ export async function GET(request: NextRequest) {
     // ★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지, isolated org 만 격리
     query = applyInstituteFilter(query, scope, { allowCommonPool: true });
     if (filterGrade) query = query.eq('grade', filterGrade);
-    if (schoolPrefilter) query = query.or(schoolPrefilter);
+    if (filterExamIds) query = query.in('id', filterExamIds);
+    else if (schoolPrefilter) query = query.or(schoolPrefilter);
 
     const { data: page, error: examsErr } = await query.range(from, from + PAGE - 1);
     if (examsErr) {
@@ -717,6 +727,7 @@ export async function GET(request: NextRequest) {
       semester: filterSemester,
       examType: filterExamType,
       schools: filterSchools,
+      examIds: filterExamIds,
     },
     matched: {
       schoolCount: matchedSchools.size,
