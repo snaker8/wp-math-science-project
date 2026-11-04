@@ -26,6 +26,10 @@ export function normalizeSchoolName(raw: string | null | undefined): string | nu
 
   // 접미사 정규화
   const normalizeSuffix = (v: string) => v
+    .replace(/여자중학교$/, '여중')
+    .replace(/여자고등학교$/, '여고')
+    .replace(/여자중$/, '여중')   // 2026-11-04 해운대여자중 ↔ 해운대여중 카드 분리 사고
+    .replace(/여자고$/, '여고')
     .replace(/여중학교$/, '여중')
     .replace(/남중학교$/, '남중')
     .replace(/여고등학교$/, '여고')
@@ -55,7 +59,25 @@ export function normalizeSchoolName(raw: string | null | undefined): string | nu
   // 학교 접미사 확인 — 없으면 학교명이 아니라고 간주
   if (!/(?:여중|남중|여고|남고|중|고|초)$/.test(s)) return null;
 
-  return s;
+  return SCHOOL_ALIASES[s] ?? s;
+}
+
+/**
+ * 같은 학교의 다른 표기 → 대표 표기. 시도 접두어·접미사 규칙으로 못 합치는 것만 적는다.
+ * (2026-11-04 학교별 리포트 감사: 포철고 8장 / 포항제철고 11장 이 카드 두 장)
+ */
+const SCHOOL_ALIASES: Record<string, string> = {
+  '포철고': '포항제철고',
+};
+
+/** 한 대표 표기에 대응하는 모든 표기(별칭·접두어 변형) — DB 사전 필터(ilike) 용 */
+export function schoolNameVariants(canonical: string): string[] {
+  const out = new Set<string>([canonical]);
+  for (const [alias, canon] of Object.entries(SCHOOL_ALIASES)) if (canon === canonical) out.add(alias);
+  // 시도 접두어가 붙은 저장값("부산중앙여고")도 ilike '%중앙여고%' 로 잡히므로 줄기만 넣으면 된다.
+  const stem = canonical.replace(/^(?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/, '');
+  if (stem.length >= 3) out.add(stem);
+  return Array.from(out);
 }
 
 /**

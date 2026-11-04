@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import {
   ArrowLeft,
   School,
@@ -16,7 +17,6 @@ import {
   Share2,
   ChevronRight,
   ChevronDown,
-  Loader2,
   BarChart3,
   Layers,
   TrendingUp,
@@ -37,8 +37,10 @@ interface ExamRow {
   subject: string | null;
   problemCount: number;
   totalPoints: number;
-  createdAt: string;
+  createdAt: string | null;
   year: number | null;
+  semester: 1 | 2 | null;
+  examType: string | null;
   hasAnalysis: boolean;
   hasShare: boolean;
   shareToken: string | null;
@@ -69,6 +71,44 @@ const DIFF_COLOR: Record<string, string> = {
   '난이도 있음': 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   '매우 난이도 있음': 'bg-rose-500/15 text-rose-300 border-rose-500/30',
 };
+
+const fmt = (n: number) => n.toLocaleString('ko-KR');
+const fmtDate = (iso: string | null | undefined) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('ko-KR');
+};
+/** "2025 · 2학기 기말" — 년도·학기·구분 중 있는 것만 */
+const examLabel = (e: { year: number | null; semester: 1 | 2 | null; examType: string | null }) => {
+  const tail = [e.semester ? `${e.semester}학기` : null, e.examType].filter(Boolean).join(' ');
+  if (e.year && tail) return `${e.year} · ${tail}`;
+  return e.year ? String(e.year) : tail || '-';
+};
+const TYPE_ORDER: Record<string, number> = { 중간: 1, 기말: 2 };
+const ERROR_KO: Record<string, string> = {
+  'School not found': '이 학교로 묶인 시험지가 없습니다',
+  'Fetch failed': '시험지를 불러오지 못했습니다',
+};
+
+// 섹션 진입 모션 — 부모 stagger, 자식 y 10→0
+const listVariants = { hidden: {}, show: { transition: { staggerChildren: 0.05, delayChildren: 0.03 } } };
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] as const } },
+};
+/** 가로 막대 — width 대신 scaleX (리플로우 없음) */
+function Bar({ pct, delay = 0 }: { pct: number; delay?: number }) {
+  return (
+    <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+      <motion.div
+        className="h-full origin-left rounded-full bg-white/40"
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: Math.max(0, Math.min(1, pct / 100)) }}
+        transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
+      />
+    </div>
+  );
+}
 
 export default function SchoolReportPage() {
   const params = useParams();
@@ -111,9 +151,29 @@ export default function SchoolReportPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-black text-white">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        <span className="text-sm text-zinc-400">로딩 중...</span>
+      <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white" aria-busy="true" aria-label="불러오는 중">
+        <div className="flex-shrink-0 border-b border-zinc-800/50 px-8 py-6">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-white/[.04]" />
+            <div className="h-10 w-10 rounded-xl border border-white/[.08] bg-white/[.04]" />
+            <div>
+              <div className="h-6 w-40 animate-pulse rounded bg-white/[.08]" />
+              <div className="mt-1.5 h-3 w-56 animate-pulse rounded bg-white/[.05]" />
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 overflow-hidden px-8 py-6">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-[88px] animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+            ))}
+          </div>
+          <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="h-48 animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+            <div className="h-48 animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+          </div>
+          <div className="h-72 animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+        </div>
       </div>
     );
   }
@@ -122,7 +182,7 @@ export default function SchoolReportPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 bg-black text-white">
         <School className="h-10 w-10 text-zinc-700" />
-        <div className="text-sm text-zinc-400">{err || '학교를 찾을 수 없습니다'}</div>
+        <div className="text-sm text-zinc-400">{(err && ERROR_KO[err]) || err || '학교를 찾을 수 없습니다'}</div>
         <button
           type="button"
           onClick={() => router.push('/dashboard/reports')}
@@ -166,13 +226,24 @@ export default function SchoolReportPage() {
         return false;
       });
     }
+    // 학년(없으면 뒤) → 시험 연도 내림차순 → 학기 → 중간→기말 → 반영일 내림차순
+    //   (종전: 학년 null 이면 비교가 뒤섞였고, 같은 학년 안에서는 업로드일 순이라 옛 시험을 늦게 올리면 맨 위로 왔다)
     return [...result].sort((a, b) => {
-      if (a.grade && b.grade && a.grade !== b.grade) return a.grade.localeCompare(b.grade);
+      if (a.grade !== b.grade) {
+        if (!a.grade) return 1;
+        if (!b.grade) return -1;
+        return a.grade.localeCompare(b.grade, 'ko');
+      }
+      if ((a.year ?? 0) !== (b.year ?? 0)) return (b.year ?? 0) - (a.year ?? 0);
+      if ((a.semester ?? 0) !== (b.semester ?? 0)) return (a.semester ?? 9) - (b.semester ?? 9);
+      const ta = TYPE_ORDER[a.examType || ''] ?? 9, tb = TYPE_ORDER[b.examType || ''] ?? 9;
+      if (ta !== tb) return ta - tb;
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
   })();
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-zinc-800/50 px-8 py-6">
@@ -181,6 +252,7 @@ export default function SchoolReportPage() {
             <button
               type="button"
               onClick={goBack}
+              aria-label="학교 목록으로"
               className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -190,18 +262,21 @@ export default function SchoolReportPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold">{data.school}</h1>
-              <p className="mt-0.5 text-xs text-zinc-400">
-                시험지 {data.summary.totalExams}건 · 총 {data.summary.totalProblems}문항
+              <p className="mt-0.5 text-xs text-zinc-400 tabular-nums">
+                시험지 {fmt(data.summary.totalExams)}건 · 총 {fmt(data.summary.totalProblems)}문항
+                {data.availableYears.length > 0 && (
+                  <> · {data.availableYears[data.availableYears.length - 1]}~{data.availableYears[0]}년</>
+                )}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      {/* Body — 섹션 순차 진입 */}
+      <motion.div variants={listVariants} initial="hidden" animate="show" className="flex-1 overflow-y-auto px-8 py-6">
         {/* 통계 4 카드 */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <motion.div variants={itemVariants} className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard
             label="시험지"
             value={data.summary.totalExams}
@@ -228,7 +303,7 @@ export default function SchoolReportPage() {
             unit="문항"
             icon={<Layers className="h-4 w-4" />}
           />
-        </div>
+        </motion.div>
 
         {/* Row: 학년 분포 + 자주 출제 단원 */}
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -238,18 +313,13 @@ export default function SchoolReportPage() {
               <Empty>학년 정보 없음</Empty>
             ) : (
               <div className="space-y-2">
-                {data.gradeDistribution.map((g) => {
+                {data.gradeDistribution.map((g, i) => {
                   const pct = (g.count / maxGradeCount) * 100;
                   return (
                     <div key={g.grade} className="grid grid-cols-[80px_1fr_60px] items-center gap-3">
                       <div className="text-xs text-zinc-300">{g.grade}</div>
-                      <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
-                        <div
-                          className="h-full rounded-full bg-white/40"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <div className="text-right text-xs text-zinc-400">{g.count}건</div>
+                      <Bar pct={pct} delay={0.15 + i * 0.04} />
+                      <div className="text-right text-xs text-zinc-400 tabular-nums">{fmt(g.count)}건</div>
                     </div>
                   );
                 })}
@@ -266,18 +336,15 @@ export default function SchoolReportPage() {
                 {data.topUnits.map((u, i) => {
                   const pct = (u.problemCount / maxUnitCount) * 100;
                   return (
-                    <div key={i} className="grid grid-cols-[1fr_60px] items-center gap-3">
+                    <div key={u.unit} className="grid grid-cols-[1fr_60px] items-center gap-3">
                       <div>
                         <div className="text-xs text-zinc-300">{u.unit}</div>
-                        <div className="mt-1 h-2 overflow-hidden rounded-full bg-zinc-800">
-                          <div
-                            className="h-full rounded-full bg-white/40"
-                            style={{ width: `${pct}%` }}
-                          />
+                        <div className="mt-1">
+                          <Bar pct={pct} delay={0.15 + i * 0.04} />
                         </div>
                       </div>
-                      <div className="text-right text-xs text-zinc-400">
-                        {u.problemCount}문항
+                      <div className="text-right text-xs text-zinc-400 tabular-nums">
+                        {fmt(u.problemCount)}문항
                       </div>
                     </div>
                   );
@@ -358,12 +425,12 @@ export default function SchoolReportPage() {
                   <th className="w-8 px-2 py-2"></th>
                   <th className="px-3 py-2 text-left">제목</th>
                   <th className="px-3 py-2 text-left">학년</th>
-                  <th className="px-3 py-2 text-center">년도</th>
+                  <th className="px-3 py-2 text-center">시험</th>
                   <th className="px-3 py-2 text-center">문항</th>
                   <th className="px-3 py-2 text-center">분석</th>
                   <th className="px-3 py-2 text-center">난이도</th>
                   <th className="px-3 py-2 text-center">공유</th>
-                  <th className="px-3 py-2 text-right">발행</th>
+                  <th className="px-3 py-2 text-right" title="자산화(업로드)한 날">반영</th>
                   <th className="px-3 py-2 text-center w-28">액션</th>
                 </tr>
               </thead>
@@ -382,9 +449,19 @@ export default function SchoolReportPage() {
                       <tr
                         className={`border-t border-zinc-800/60 transition-colors ${
                           expanded ? 'bg-zinc-900/60' : 'hover:bg-zinc-900/40'
-                        } ${e.hasAnalysis ? 'cursor-pointer' : ''}`}
+                        } ${e.hasAnalysis ? 'cursor-pointer focus:outline-none focus-visible:bg-zinc-900/60' : ''}`}
+                        tabIndex={e.hasAnalysis ? 0 : undefined}
+                        role={e.hasAnalysis ? 'button' : undefined}
+                        aria-expanded={e.hasAnalysis ? expanded : undefined}
                         onClick={() => {
                           if (e.hasAnalysis) {
+                            setExpandedId(expanded ? null : e.id);
+                          }
+                        }}
+                        onKeyDown={(ev) => {
+                          if (!e.hasAnalysis) return;
+                          if (ev.key === 'Enter' || ev.key === ' ') {
+                            ev.preventDefault();
                             setExpandedId(expanded ? null : e.id);
                           }
                         }}
@@ -400,8 +477,8 @@ export default function SchoolReportPage() {
                         </td>
                         <td className="px-3 py-2 text-white">{e.title}</td>
                         <td className="px-3 py-2 text-zinc-400">{e.grade || '-'}</td>
-                        <td className="px-3 py-2 text-center text-zinc-400">{e.year ?? '-'}</td>
-                        <td className="px-3 py-2 text-center text-zinc-300">{e.problemCount}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-center text-zinc-400 tabular-nums">{examLabel(e)}</td>
+                        <td className="px-3 py-2 text-center text-zinc-300 tabular-nums">{e.problemCount}</td>
                         <td className="px-3 py-2 text-center">
                           {e.hasAnalysis ? (
                             <span className="inline-flex items-center gap-1 rounded-full border border-white/[.08] bg-white/[.04] px-2 py-0.5 text-content-secondary">
@@ -433,8 +510,8 @@ export default function SchoolReportPage() {
                             <span className="text-zinc-600">-</span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-right text-zinc-400">
-                          {new Date(e.createdAt).toLocaleDateString('ko-KR')}
+                        <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                          {fmtDate(e.createdAt)}
                         </td>
                         <td className="px-3 py-2" onClick={(ev) => ev.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
@@ -459,13 +536,27 @@ export default function SchoolReportPage() {
                           </div>
                         </td>
                       </tr>
-                      {expanded && e.analysis && (
-                        <tr className="border-t border-zinc-800/40 bg-zinc-950/60">
-                          <td colSpan={10} className="px-6 py-5">
-                            <ExamAnalysisInline analysis={e.analysis} />
-                          </td>
-                        </tr>
-                      )}
+                      {/* 펼침 행 — tr 은 height 애니메이션이 안 되니 td 안쪽 div 에 건다 */}
+                      <AnimatePresence initial={false}>
+                        {expanded && e.analysis && (
+                          <tr className="border-t border-zinc-800/40 bg-zinc-950/60">
+                            <td colSpan={10} className="p-0">
+                              <motion.div
+                                key="expand"
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                className="overflow-hidden"
+                              >
+                                <div className="px-6 py-5">
+                                  <ExamAnalysisInline analysis={e.analysis} />
+                                </div>
+                              </motion.div>
+                            </td>
+                          </tr>
+                        )}
+                      </AnimatePresence>
                     </React.Fragment>
                   );
                 })}
@@ -473,8 +564,9 @@ export default function SchoolReportPage() {
             </table>
           </div>
         </Panel>
-      </div>
+      </motion.div>
     </div>
+    </MotionConfig>
   );
 }
 
@@ -503,8 +595,8 @@ function StatCard({
         {icon}
         {label}
       </div>
-      <div className={`mt-2 text-2xl font-bold ${accentColor}`}>
-        {value}
+      <div className={`mt-2 text-2xl font-bold tabular-nums ${accentColor}`}>
+        {fmt(value)}
         <span className="ml-1 text-xs font-medium text-zinc-500">{unit}</span>
       </div>
     </div>
@@ -521,13 +613,13 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+    <motion.div variants={itemVariants} className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
       <div className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
         {icon}
         {title}
       </div>
       {children}
-    </div>
+    </motion.div>
   );
 }
 

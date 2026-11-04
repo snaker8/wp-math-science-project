@@ -7,8 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter } from '@/lib/security/institute-guard';
-import { extractSchoolName } from '@/lib/utils/school-extract';
+import { resolveSchoolName } from '@/lib/utils/school-extract';
+import { normalizeSchoolName, schoolNameVariants } from '@/lib/utils/school-normalize';
 import { extractExamYear } from '@/lib/utils/year-extract';
+import { extractSemester, extractExamType } from '@/lib/utils/exam-meta-extract';
 import type { ExamAIAnalysis } from '@/types/exam-ai-analysis';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +22,10 @@ interface ExamRow {
   subject: string | null;
   problemCount: number;
   totalPoints: number;
-  createdAt: string;
+  createdAt: string | null;
   year: number | null;
+  semester: 1 | 2 | null;
+  examType: string | null;
   hasAnalysis: boolean;
   hasShare: boolean;
   shareToken: string | null;
@@ -30,6 +34,15 @@ interface ExamRow {
   /** ai_analysis 풀 페이로드. 분석 미생성 시 null. 검색·인라인 펼침에서 그대로 사용 */
   analysis: ExamAIAnalysis | null;
 }
+
+type ExamRec = {
+  id: string; title: string; grade: string | null; subject: string | null; total_points: number | null;
+  school_name: string | null; exam_year: number | null; semester: number | null; exam_round: string | null; exam_type: string | null;
+  ai_analysis: unknown; share_token: string | null; created_at: string | null; exam_problems: Array<{ count: number }> | null;
+};
+
+/** PostgREST .or() 필터 값 — 쉼표·괄호가 들어가면 문법이 깨지므로 제거 */
+const safeLike = (s: string) => s.replace(/[,()%]/g, '');
 
 export async function GET(
   _request: NextRequest,
@@ -44,22 +57,23 @@ export async function GET(
   }
 
   const { school: rawSchool } = await params;
-  const school = decodeURIComponent(rawSchool);
+  const school = normalizeSchoolName(decodeURIComponent(rawSchool)) ?? decodeURIComponent(rawSchool);
 
-  // 시험지 조회 후 학교명 매칭 (★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지)
+  // ★ 2026-11-04: 학교 하나를 보는데 전체 2,474장(ai_analysis 포함)을 받던 것 → 학교명 변형들로 DB 사전 필터.
+  //   정확한 판정은 아래 resolveSchoolName === school 로 다시 한다 (ilike 는 넉넉히 거르는 용도).
+  const variants = schoolNameVariants(school).map(safeLike).filter(Boolean);
+  const orFilter = variants.flatMap((v) => [`school_name.ilike.%${v}%`, `title.ilike.%${v}%`]).join(',');
+
   // ★ exams.problem_count 컬럼이 prod DB 에 없음 → exam_problems(count) 조인으로 derive
-  // ★ Supabase 기본 1,000행 상한 → range 페이지네이션 (by-school 과 동일, 2026-11-04 해운대고 27장 중 4장 사고)
+  // ★ Supabase 기본 1,000행 상한 → range 페이지네이션 (by-school 과 동일)
   const PAGE = 500;
-  type ExamRec = {
-    id: string; title: string; grade: string | null; subject: string | null; total_points: number | null;
-    ai_analysis: unknown; share_token: string | null; created_at: string | null; exam_problems: Array<{ count: number }> | null;
-  };
   const exams: ExamRec[] = [];
   for (let from = 0; ; from += PAGE) {
     const baseQ = supabaseAdmin
       .from('exams')
-      .select('id, title, grade, subject, total_points, ai_analysis, share_token, created_at, exam_problems(count)')
-      .is('deleted_at', null);
+      .select('id, title, grade, subject, total_points, school_name, exam_year, semester, exam_round, exam_type, ai_analysis, share_token, created_at, exam_problems(count)')
+      .is('deleted_at', null)
+      .or(orFilter);
     const { data: page, error } = await applyInstituteFilter(baseQ, scope, { allowCommonPool: true })
       .order('created_at', { ascending: false })
       .range(from, from + PAGE - 1);
@@ -71,30 +85,31 @@ export async function GET(
     if (page.length < PAGE) break;
   }
 
-  // 학교명 매칭 (정확히 일치)
-  const matched = (exams || []).filter((e) => extractSchoolName(e.title) === school);
+  // 학교명 매칭 — by-school 과 같은 판정(컬럼 우선 + 표기 통일)
+  const matched = exams.filter((e) => e.exam_type !== '모의고사' && resolveSchoolName(e) === school);
 
   if (matched.length === 0) {
     return NextResponse.json({ error: 'School not found' }, { status: 404 });
   }
 
-  // 시험지 row 변환
+  // 시험지 row 변환 — 년도·학기·구분은 DB 컬럼 → 제목 파싱 순
   const examRows: ExamRow[] = matched.map((e) => {
     const ai = e.ai_analysis as Record<string, unknown> | null;
     const hasAnalysis = !!(ai && typeof ai === 'object' && 'generatedAt' in ai);
     const analysis = hasAnalysis ? (ai as unknown as ExamAIAnalysis) : null;
+    const semester = (e.semester === 1 || e.semester === 2 ? e.semester : null) ?? extractSemester(e.title);
+    const examType = e.exam_round || extractExamType(e.title);
     return {
       id: e.id,
       title: e.title,
       grade: e.grade,
       subject: e.subject,
-      problemCount:
-        Number(
-          (e as { exam_problems?: Array<{ count: number }> }).exam_problems?.[0]?.count
-        ) || 0,
+      problemCount: Number(e.exam_problems?.[0]?.count) || 0,
       totalPoints: Number(e.total_points) || 0,
-      createdAt: e.created_at as string,
-      year: extractExamYear(e.title, e.created_at as string | null),
+      createdAt: e.created_at ?? null,
+      year: e.exam_year ?? extractExamYear(e.title, e.created_at),
+      semester,
+      examType,
       hasAnalysis,
       hasShare: !!e.share_token,
       shareToken: e.share_token || null,
@@ -118,9 +133,9 @@ export async function GET(
   });
   const gradeDistribution = Array.from(gradeMap.entries())
     .map(([grade, count]) => ({ grade, count }))
-    .sort((a, b) => a.grade.localeCompare(b.grade));
+    .sort((a, b) => a.grade.localeCompare(b.grade, 'ko'));
 
-  // 분석 완료 시험지 단원 빈도 집계
+  // 분석 완료 시험지만 단원·난이도 집계 (★ generatedAt 없는 미완성 분석은 제외 — 위 "AI 분석 완료" 숫자와 일치)
   const unitFreq = new Map<string, number>();
   const overallDifficultyDist: Record<string, number> = {
     평이: 0,
@@ -128,20 +143,17 @@ export async function GET(
     '난이도 있음': 0,
     '매우 난이도 있음': 0,
   };
-  matched.forEach((e) => {
-    const ai = e.ai_analysis as
-      | {
-          overallDifficulty?: string;
-          unitAnalyses?: Array<{ majorUnit: string; questionNumbers: number[] }>;
-        }
-      | null
-      | undefined;
-    if (ai?.overallDifficulty) {
-      overallDifficultyDist[ai.overallDifficulty] =
-        (overallDifficultyDist[ai.overallDifficulty] || 0) + 1;
+  examRows.forEach((e) => {
+    const ai = e.analysis;
+    if (!ai) return;
+    if (ai.overallDifficulty) {
+      overallDifficultyDist[ai.overallDifficulty] = (overallDifficultyDist[ai.overallDifficulty] || 0) + 1;
     }
-    (ai?.unitAnalyses || []).forEach((u) => {
-      unitFreq.set(u.majorUnit, (unitFreq.get(u.majorUnit) || 0) + (u.questionNumbers?.length || 0));
+    (ai.unitAnalyses || []).forEach((u) => {
+      // AI 가 쓴 자유 문자열 — 공백 차이("이차 함수"/"이차함수")는 같은 단원으로
+      const key = String(u.majorUnit || '').replace(/\s+/g, '').trim();
+      if (!key) return;
+      unitFreq.set(key, (unitFreq.get(key) || 0) + (u.questionNumbers?.length || 0));
     });
   });
 

@@ -12,9 +12,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import Link from 'next/link';
+import { motion, MotionConfig } from 'framer-motion';
 import {
   ArrowLeft,
   Filter,
+  RefreshCw,
   BarChart3,
   School,
   Sparkles,
@@ -136,13 +138,27 @@ const GRADE_OPTIONS = ['중1', '중2', '중3', '고1', '고2', '고3'] as const;
 const SEMESTER_OPTIONS = [1, 2] as const;
 const EXAM_TYPE_OPTIONS = ['중간', '기말', '모의고사', '수행평가'] as const;
 
+const fmt = (n: number) => n.toLocaleString('ko-KR');
+
+// 결과 섹션 진입 모션 — 부모 stagger, 자식 y 10→0 (prefers-reduced-motion 은 MotionConfig 가 존중)
+const listVariants = { hidden: {}, show: { transition: { staggerChildren: 0.05, delayChildren: 0.03 } } };
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] as const } },
+};
+
 // ─── 메인 ────────────────────────────────────────────────────────────────
 export default function AggregatePage() {
   const goBack = useSmartBack('/dashboard/reports');
   const [hubSchools, setHubSchools] = useState<SchoolFromHub[]>([]);
+  const [hubLoading, setHubLoading] = useState(true);
+  const [hubError, setHubError] = useState<string | null>(null);
   const [allYears, setAllYears] = useState<number[]>([]);
   const [data, setData] = useState<AggregateResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** 마지막으로 실행한 조회 문자열 — 공유 링크·"필터 변경됨" 판정은 화면에 보이는 결과 기준 (2026-11-04 B21·B22) */
+  const [lastQuery, setLastQuery] = useState<string | null>(null);
 
   // 필터
   const [year, setYear] = useState<number | null>(null);
@@ -153,21 +169,43 @@ export default function AggregatePage() {
 
   // 학교 목록·년도 로드
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const r = await fetch('/api/reports/by-school', { cache: 'no-store' });
-      if (!r.ok) return;
-      const d = await r.json();
-      setHubSchools(d.schools || []);
-      const yearSet = new Set<number>();
-      ((d.schools || []) as SchoolFromHub[]).forEach((s) => s.years.forEach((y) => yearSet.add(y)));
-      setAllYears(Array.from(yearSet).sort((a, b) => b - a));
+      try {
+        const r = await fetch('/api/reports/by-school', { cache: 'no-store' });
+        if (!r.ok) {
+          if (!cancelled) setHubError(`학교 목록을 불러오지 못했습니다 (${r.status})`);
+          return;
+        }
+        const d = await r.json();
+        if (cancelled) return;
+        setHubSchools(d.schools || []);
+        const yearSet = new Set<number>();
+        ((d.schools || []) as SchoolFromHub[]).forEach((s) => s.years.forEach((y) => yearSet.add(y)));
+        setAllYears(Array.from(yearSet).sort((a, b) => b - a));
+      } catch {
+        if (!cancelled) setHubError('네트워크 오류로 학교 목록을 불러오지 못했습니다');
+      } finally {
+        if (!cancelled) setHubLoading(false);
+      }
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const visibleSchools = useMemo(() => {
     if (!grade) return hubSchools;
     return hubSchools.filter((s) => s.grades.includes(grade));
   }, [hubSchools, grade]);
+
+  // ★ 학년을 바꾸면 칩에서 사라진 학교는 선택에서도 뺀다 (종전엔 숨은 채 요청에 실려 갔다 — B24)
+  useEffect(() => {
+    if (hubLoading) return;
+    const visible = new Set(visibleSchools.map((s) => s.school));
+    setSelectedSchools((prev) => {
+      const next = new Set(Array.from(prev).filter((s) => visible.has(s)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visibleSchools, hubLoading]);
 
   const buildQueryString = (): string => {
     const qs = new URLSearchParams();
@@ -180,18 +218,27 @@ export default function AggregatePage() {
   };
 
   const fetchAggregate = async () => {
+    const qs = buildQueryString();
     setLoading(true);
+    setError(null);
     try {
-      const r = await fetch(`/api/reports/aggregate?${buildQueryString()}`, { cache: 'no-store' });
+      const r = await fetch(`/api/reports/aggregate?${qs}`, { cache: 'no-store' });
       if (!r.ok) {
-        setData(null);
+        const d = await r.json().catch(() => ({}));
+        setError(d?.detail || d?.error || `집계에 실패했습니다 (${r.status})`);
         return;
       }
       setData(await r.json());
+      setLastQuery(qs);
+    } catch (e) {
+      setError(e instanceof Error ? `네트워크 오류: ${e.message}` : '네트워크 오류로 집계하지 못했습니다');
     } finally {
       setLoading(false);
     }
   };
+
+  const currentQuery = buildQueryString();
+  const filterDirty = data != null && lastQuery != null && currentQuery !== lastQuery;
 
   const toggleSchool = (s: string) => {
     setSelectedSchools((prev) => {
@@ -208,7 +255,7 @@ export default function AggregatePage() {
   const [shareCopied, setShareCopied] = useState(false);
   const handleShareClick = async () => {
     if (typeof window === 'undefined') return;
-    const url = `${window.location.origin}/share/aggregate?${buildQueryString()}`;
+    const url = `${window.location.origin}/share/aggregate?${lastQuery ?? buildQueryString()}`;
     try {
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
@@ -222,6 +269,7 @@ export default function AggregatePage() {
     year != null || grade != null || semester != null || examType != null || selectedSchools.size > 0;
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
       {/* Header — [school] 패턴 */}
       <div className="flex-shrink-0 border-b border-zinc-800/50 px-8 py-6">
@@ -249,9 +297,9 @@ export default function AggregatePage() {
               <Info className="h-3 w-3" />
               모든 수치는 DB 기반 (할루시네이션 0)
             </span>
-            {data && data.matched.examCount > 0 && (
+            {data && data.matched.examCount > 0 && lastQuery != null && (
               <a
-                href={`/share/aggregate?${buildQueryString()}`}
+                href={`/share/aggregate?${lastQuery}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleShareClick}
@@ -358,43 +406,81 @@ export default function AggregatePage() {
                   </button>
                 );
               })}
-              {visibleSchools.length === 0 && (
+              {hubLoading && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+                  <span className="h-3 w-3 animate-spin rounded-full border border-zinc-600 border-t-transparent" />
+                  학교 목록 불러오는 중
+                </span>
+              )}
+              {!hubLoading && hubError && (
+                <span className="inline-flex items-center gap-1 text-xs text-content-secondary">
+                  <AlertTriangle className="h-3 w-3" />
+                  {hubError}
+                </span>
+              )}
+              {!hubLoading && !hubError && visibleSchools.length === 0 && (
                 <span className="text-xs text-zinc-500">해당 조건의 학교 없음</span>
               )}
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={fetchAggregate}
               disabled={loading}
-              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200 disabled:opacity-50"
             >
-              {loading ? '집계 중...' : '집계 분석 실행'}
+              {loading && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />}
+              {loading ? '집계 중...' : filterDirty ? '바뀐 필터로 다시 실행' : '집계 분석 실행'}
             </button>
-            {data && (
-              <span className="text-xs text-zinc-400">
-                매칭 {data.matched.examCount}건 / 학교 {data.matched.schoolCount}곳
+            {data && !filterDirty && (
+              <span className="text-xs text-zinc-400 tabular-nums">
+                매칭 {fmt(data.matched.examCount)}건 / 학교 {fmt(data.matched.schoolCount)}곳
+              </span>
+            )}
+            {filterDirty && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-white/[.14] bg-white/[.06] px-2 py-1 text-[11px] text-content-primary">
+                <RefreshCw className="h-3 w-3" />
+                필터가 바뀌었습니다. 아래 결과는 이전 조건입니다.
+              </span>
+            )}
+            {error && (
+              <span className="inline-flex items-center gap-1 text-xs text-content-primary">
+                <AlertTriangle className="h-3 w-3" />
+                {error}
               </span>
             )}
           </div>
         </div>
 
-        {/* 결과 */}
-        {data && data.matched.examCount > 0 ? (
-          <ResultsView data={data} />
-        ) : data && data.matched.examCount === 0 ? (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-center text-zinc-400">
-            매칭되는 시험지가 없습니다. 필터를 조정해보세요.
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-900/20 p-8 text-center text-zinc-500">
-            필터를 선택하고 <span className="text-content-primary">집계 분석 실행</span> 을 누르세요.
-          </div>
-        )}
+        {/* 결과 — 다시 실행할 때마다 key 가 바뀌어 진입 모션이 다시 나온다 */}
+        <div className={`relative transition-opacity ${loading && data ? 'pointer-events-none opacity-50' : ''} ${filterDirty ? 'opacity-70' : ''}`} aria-busy={loading}>
+          {data && data.matched.examCount > 0 ? (
+            <ResultsView key={lastQuery ?? 'result'} data={data} />
+          ) : data && data.matched.examCount === 0 ? (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 text-center text-zinc-400">
+              매칭되는 시험지가 없습니다. 필터를 조정해보세요.
+            </div>
+          ) : loading ? (
+            <div className="space-y-4" aria-label="집계 중">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-[88px] animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+                ))}
+              </div>
+              <div className="h-40 animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+              <div className="h-64 animate-pulse rounded-xl border border-zinc-800 bg-zinc-900/40" />
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-900/20 p-8 text-center text-zinc-500">
+              필터를 선택하고 <span className="text-content-primary">집계 분석 실행</span> 을 누르세요.
+            </div>
+          )}
+        </div>
       </div>
     </div>
+    </MotionConfig>
   );
 }
 
@@ -455,8 +541,8 @@ function StatCard({
         {icon}
         {label}
       </div>
-      <div className={`mt-2 text-2xl font-bold ${accentColor}`}>
-        {value}
+      <div className={`mt-2 text-2xl font-bold tabular-nums ${accentColor}`}>
+        {typeof value === 'number' ? fmt(value) : value}
         {unit && <span className="ml-1 text-xs font-medium text-zinc-500">{unit}</span>}
       </div>
     </div>
@@ -477,7 +563,7 @@ function Panel({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 ${className}`}>
+    <motion.div variants={itemVariants} className={`rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 ${className}`}>
       <div className="mb-3 flex items-baseline gap-2">
         <div className="flex items-center gap-2 text-sm font-bold text-white">
           {icon}
@@ -486,7 +572,7 @@ function Panel({
         {hint && <span className="text-[10px] text-zinc-500">{hint}</span>}
       </div>
       {children}
-    </div>
+    </motion.div>
   );
 }
 
@@ -497,9 +583,9 @@ function Empty({ children }: { children: React.ReactNode }) {
 // ─── 결과 뷰 ─────────────────────────────────────────────────────────────
 function ResultsView({ data }: { data: AggregateResponse }) {
   return (
-    <div className="space-y-4">
+    <motion.div variants={listVariants} initial="hidden" animate="show" className="space-y-4">
       {/* 매칭 4 stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <motion.div variants={itemVariants} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
           label="학교"
           value={data.matched.schoolCount}
@@ -524,7 +610,7 @@ function ResultsView({ data }: { data: AggregateResponse }) {
           unit={`(분류 ${data.matched.classifiedProblemCount})`}
           icon={<Target className="h-4 w-4" />}
         />
-      </div>
+      </motion.div>
 
       {/* 강사 인사이트 — narrative 형식 (베테랑 수학 강사가 학부모에게 풀어 설명) */}
       {data.narrative.length > 0 && (
@@ -588,7 +674,20 @@ function ResultsView({ data }: { data: AggregateResponse }) {
 
       {/* 매칭 시험지 목록 */}
       <ExamListPanel data={data} />
-    </div>
+    </motion.div>
+  );
+}
+
+/** 가로 막대 — width 는 그대로 두고 scaleX 로 차오르게 (리플로우 없음) */
+function GrowBar({ pct, className }: { pct: number; className: string }) {
+  return (
+    <motion.div
+      className={`origin-left ${className}`}
+      style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+      initial={{ scaleX: 0 }}
+      animate={{ scaleX: 1 }}
+      transition={{ duration: 0.5, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+    />
   );
 }
 
@@ -622,10 +721,7 @@ function DifficultyPanel({ data }: { data: AggregateResponse }) {
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800">
           {dd.overallAvg != null && (
-            <div
-              className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500"
-              style={{ width: `${(dd.overallAvg / 10) * 100}%` }}
-            />
+            <GrowBar pct={(dd.overallAvg / 10) * 100} className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500" />
           )}
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
@@ -648,7 +744,7 @@ function DifficultyPanel({ data }: { data: AggregateResponse }) {
                 {band.min}-{band.max}
               </div>
               <div className="flex-1 overflow-hidden rounded-full bg-zinc-800">
-                <div className={`h-2 ${cls.bar}`} style={{ width: `${pct}%` }} />
+                <GrowBar pct={pct} className={`h-2 ${cls.bar}`} />
               </div>
               <div className="w-16 text-right tabular-nums text-zinc-300">{bc.examCount}건</div>
               <div className="w-12 text-right tabular-nums text-zinc-500">{pct.toFixed(0)}%</div>
@@ -677,10 +773,7 @@ function UnitFrequencyPanel({ data }: { data: AggregateResponse }) {
                 {u.level1Name}
               </div>
               <div className="flex-1 overflow-hidden rounded-full bg-zinc-800">
-                <div
-                  className="h-2 bg-gradient-to-r from-cyan-500 to-indigo-500"
-                  style={{ width: `${pct}%` }}
-                />
+                <GrowBar pct={pct} className="h-2 bg-gradient-to-r from-cyan-500 to-indigo-500" />
               </div>
               <div className="w-12 text-right tabular-nums text-zinc-300">{u.problemCount}</div>
               <div className="w-20 text-right text-[10px] text-zinc-500">
@@ -725,9 +818,12 @@ function UnitTrendsPanel({ data }: { data: AggregateResponse }) {
                   const h = (c.problemCount / maxC) * 100;
                   return (
                     <div key={years[i]} className="flex flex-1 flex-col items-center gap-0.5">
-                      <div
-                        className="w-full rounded-sm bg-gradient-to-t from-cyan-600 to-cyan-400"
+                      <motion.div
+                        className="w-full origin-bottom rounded-sm bg-gradient-to-t from-cyan-600 to-cyan-400"
                         style={{ height: `${h}%`, minHeight: c.problemCount > 0 ? 2 : 0 }}
+                        initial={{ scaleY: 0 }}
+                        animate={{ scaleY: 1 }}
+                        transition={{ duration: 0.45, delay: 0.15 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
                         title={`${years[i]}: ${c.problemCount}문 / ${c.schoolCount}학교`}
                       />
                       <div className="text-[9px] tabular-nums text-zinc-500">{years[i]}</div>
@@ -774,7 +870,9 @@ function UnitSegmentPanel({
   const accentBar = accent === 'cyan' ? 'bg-cyan-500' : 'bg-amber-500';
   return (
     <Panel title={title} icon={icon}>
-      {units.length === 0 ? (
+      {totalSchools < 3 ? (
+        <Empty>학교가 3곳 이상 매칭될 때 공통·차별 단원을 나눕니다 (지금 {totalSchools}곳)</Empty>
+      ) : units.length === 0 ? (
         <Empty>{accent === 'cyan' ? '공통 단원 없음' : '차별 단원 없음 (모든 단원이 고르게 출제됨)'}</Empty>
       ) : (
         <div className="space-y-1.5">
@@ -786,7 +884,7 @@ function UnitSegmentPanel({
                   {u.level1Name}
                 </div>
                 <div className="flex-1 overflow-hidden rounded-full bg-zinc-800">
-                  <div className={`h-2 ${accentBar}`} style={{ width: `${pct}%` }} />
+                  <GrowBar pct={pct} className={`h-2 ${accentBar}`} />
                 </div>
                 <div className="w-16 text-right tabular-nums text-zinc-300">
                   {u.schoolCount}/{totalSchools}
@@ -826,7 +924,11 @@ function SchoolBreakdownPanel({ data }: { data: AggregateResponse }) {
                   : '-';
               return (
                 <tr key={s.school} className="border-b border-zinc-800/50">
-                  <td className="py-2 pr-2 font-semibold text-zinc-200">{s.school}</td>
+                  <td className="py-2 pr-2 font-semibold text-zinc-200">
+                    <Link href={`/dashboard/reports/${encodeURIComponent(s.school)}`} className="hover:text-white hover:underline underline-offset-2" title="학교 상세">
+                      {s.school}
+                    </Link>
+                  </td>
                   <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{s.examCount}</td>
                   <td className="py-2 px-2 text-right tabular-nums text-zinc-300">{s.problemCount}</td>
                   <td className="py-2 px-2">
@@ -917,7 +1019,7 @@ function AiNarrativePanel({ data }: { data: AggregateResponse }) {
             <details key={n.examId} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2.5 text-xs">
               <summary className="cursor-pointer text-zinc-200">
                 <span className="font-semibold">{n.school}</span>
-                <span className="ml-1.5 text-zinc-500">{n.year} · {n.examTitle.slice(0, 30)}</span>
+                <span className="ml-1.5 text-zinc-500">{[n.year, n.examTitle.slice(0, 30)].filter(Boolean).join(' · ')}</span>
                 <span className="ml-1.5 text-[10px] text-content-tertiary">시험지 분석</span>
               </summary>
               {n.summary && (
@@ -931,7 +1033,7 @@ function AiNarrativePanel({ data }: { data: AggregateResponse }) {
                   <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-500">고난도 문항</div>
                   <ul className="space-y-1.5">
                     {n.hardQuestions.map((h) => (
-                      <li key={h.problemId} className="border-l-2 border-white/[.14] pl-2 text-zinc-300">
+                      <li key={`${n.examId}-${h.number}`} className="border-l-2 border-white/[.14] pl-2 text-zinc-300">
                         <span className="font-semibold text-zinc-100">#{h.number}</span>
                         <span className="ml-1.5 text-zinc-200 [&_p]:inline [&_div]:inline"><MixedContentRenderer content={h.subTitle} inline /></span>
                         <div className="mt-0.5 text-[11px] text-zinc-400">{h.intent}</div>
@@ -971,9 +1073,9 @@ function ExamListPanel({ data }: { data: AggregateResponse }) {
                 <tr key={e.id} className="border-b border-zinc-800/50">
                   <td className="max-w-md truncate py-2 pr-2">
                     <Link
-                      href={`/dashboard/cloud/${e.id}`}
+                      href={`/dashboard/exam-analysis/${e.id}`}
                       className="text-zinc-200 hover:text-white"
-                      title={e.title}
+                      title={`${e.title} — 분석 페이지`}
                     >
                       {e.title}
                     </Link>
