@@ -28,6 +28,7 @@ import {
   buildFailureLessonsBlock,
 } from './correction-examples';
 import { cachedSystem } from '@/lib/claude/cache';
+import { normalizeImageForVision } from '@/lib/claude/image-normalize';
 
 // ============================================================================
 // Configuration
@@ -1104,10 +1105,11 @@ ${detected?.forceGraph ? '★★★ 이 이미지에는 수학 그래프/도형/
     const res = await fetch(imageUrl);
     if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
     const buffer = await res.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
-    const contentType = res.headers.get('content-type') || 'image/png';
+    // ★ BMP(HML 그림) 는 Gemini 미지원 → PNG 변환 (2026-11-04)
+    const norm = await normalizeImageForVision(Buffer.from(buffer), res.headers.get('content-type'));
+    if (!norm) throw new Error('Unsupported image format');
     imagePart = {
-      inlineData: { data: base64, mimeType: contentType },
+      inlineData: { data: norm.data, mimeType: norm.mediaType },
     };
   }
 
@@ -1933,12 +1935,13 @@ async function callClaudeVision(
     const res = await fetch(imageUrl);
     if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
     const buffer = await res.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
-    const contentType = res.headers.get('content-type') || 'image/png';
+    // ★ BMP(HML 그림) 는 Claude 미지원 → PNG 변환 (2026-11-04)
+    const norm = await normalizeImageForVision(Buffer.from(buffer), res.headers.get('content-type'));
+    if (!norm) throw new Error('Unsupported image format');
     imageSource = {
       type: 'base64',
-      media_type: contentType,
-      data: base64,
+      media_type: norm.mediaType,
+      data: norm.data,
     };
   }
 

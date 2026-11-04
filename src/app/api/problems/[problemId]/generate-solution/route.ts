@@ -14,6 +14,7 @@ import { requireSolutionPin } from '@/lib/security/solution-pin';
 import { CURRICULUM_OPTIONS } from '@/lib/workflow/curriculum-options';
 import { assertProblemAccess } from '@/lib/security/institute-guard';
 import { cachedSystem } from '@/lib/claude/cache';
+import { normalizeImageForVision } from '@/lib/claude/image-normalize';
 
 // ★ Vercel 함수 시간 제한: 기본 60s 로는 Sonnet thinking(최대 90s) + Gemini 검증 +
 //   Opus 폴백까지 한 번에 못 끝내고 502/504 로 잘림 → 서답형/장문 문제에서 매번 실패.
@@ -540,14 +541,15 @@ ${isSelectAll ? `★ per_choice_check 필수 작성 규칙 ("모두 고르기"�
               const imgRes = await fetch(img.url);
               if (imgRes.ok) {
                 const arrayBuffer = await imgRes.arrayBuffer();
-                const base64 = Buffer.from(arrayBuffer).toString('base64');
-                const contentType = imgRes.headers.get('content-type') || 'image/png';
+                // ★ BMP(HML 그림) 는 Claude 미지원 → PNG 변환 (2026-11-04). 변환 실패면 그 그림만 건너뜀.
+                const norm = await normalizeImageForVision(Buffer.from(arrayBuffer), imgRes.headers.get('content-type'));
+                if (!norm) continue;
                 contentParts.push({
                   type: 'image',
                   source: {
                     type: 'base64',
-                    media_type: contentType,
-                    data: base64,
+                    media_type: norm.mediaType,
+                    data: norm.data,
                   },
                 });
               }
