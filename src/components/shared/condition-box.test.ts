@@ -10,6 +10,22 @@ function pipeline(content: string) {
   return extractConditionBoxes(protectedBody);
 }
 
+describe('extractConditionBoxes — 「(가)는 …」 지칭 문장은 박스 아님 (온천중 25-1-2-F #11)', () => {
+  const C11 = '(가)는 한 변의 길이가 $6 { {cm} }$인 정사각형을 밑면으로 하는 사각뿔의 전개도이다. (나)는 사각기둥이다. (가)와 (나)의 겉넓이가 같을 때, $x$의 값은? (단, (가)의 옆면은 모두 합동이다.)\n[도형][도형]';
+  it('★ 본문이 통째로 조건 박스가 되지 않는다', () => {
+    const { conditionBoxes, mainContent } = pipeline(C11);
+    expect(conditionBoxes).toHaveLength(0);
+    expect(mainContent).toContain('(가)는 한 변의');
+  });
+  it('조건 항목 「(가) 모든 …」 은 여전히 박스', () => {
+    const { conditionBoxes } = pipeline('다음 조건을 만족시킨다.\n(가) 모든 실수 $x$에 대하여 $f(x)>0$\n(나) $f(1)=2$\n$f(3)$의 값을 구하시오.');
+    expect(conditionBoxes).toHaveLength(1);
+  });
+  it('「(가) 는 …」 처럼 띄어 쓴 지칭도 박스 아님', () => {
+    expect(pipeline('(가) 는 정사각형이다. (나)의 넓이는?').conditionBoxes).toHaveLength(0);
+  });
+});
+
 describe('extractConditionBoxes (실제 함수) — 동인고 #13 문제문장이 박스로 안 딸려감', () => {
   it('★★ "구하시오" 문제문장은 박스 밖(mainContent), 박스엔 (가)(나)만', () => {
     const { mainContent, conditionBoxes } = pipeline(C13);
