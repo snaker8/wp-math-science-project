@@ -38,6 +38,10 @@ export function cleanLatexContent(content: string): string {
   //   처음 한 번만 strip (replace 의 기본 동작).
   result = result.replace(/^\s*\d{1,2}\s*[.)]\s+/, '');
 
+  // ★ 빈 줄 3개↑ → 2개 (렌더링 시점만). 수학비서 HML 의 답안 적는 빈 문단이 그대로 들어와
+  //   (1)·(2) 사이가 크게 벌어지던 것 (2026-11-04 온천중 25-1-2-F #22, 빈 줄 4개). 새 적재는 저장 시 이미 접는다.
+  result = result.replace(/\n[ \t]*(?:\n[ \t]*){2,}/g, '\n\n');
+
   // ─── 연립방정식 괄호 패턴 수정 ───
   // OCR 출력: $\left\{$eq1$\n$eq2$\right.$ → KaTeX에서 $ 구분자 꼬임
   // 수정: $\begin{cases} eq1 \\ eq2 \end{cases}$
