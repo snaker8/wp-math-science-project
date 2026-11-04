@@ -48,15 +48,27 @@ export async function GET(
 
   // 시험지 조회 후 학교명 매칭 (★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지)
   // ★ exams.problem_count 컬럼이 prod DB 에 없음 → exam_problems(count) 조인으로 derive
-  const baseQ = supabaseAdmin
-    .from('exams')
-    .select('id, title, grade, subject, total_points, ai_analysis, share_token, created_at, exam_problems(count)')
-    .is('deleted_at', null);
-  const { data: exams, error } = await applyInstituteFilter(baseQ, scope, { allowCommonPool: true })
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ error: 'Fetch failed', detail: error.message }, { status: 500 });
+  // ★ Supabase 기본 1,000행 상한 → range 페이지네이션 (by-school 과 동일, 2026-11-04 해운대고 27장 중 4장 사고)
+  const PAGE = 500;
+  type ExamRec = {
+    id: string; title: string; grade: string | null; subject: string | null; total_points: number | null;
+    ai_analysis: unknown; share_token: string | null; created_at: string | null; exam_problems: Array<{ count: number }> | null;
+  };
+  const exams: ExamRec[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const baseQ = supabaseAdmin
+      .from('exams')
+      .select('id, title, grade, subject, total_points, ai_analysis, share_token, created_at, exam_problems(count)')
+      .is('deleted_at', null);
+    const { data: page, error } = await applyInstituteFilter(baseQ, scope, { allowCommonPool: true })
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      return NextResponse.json({ error: 'Fetch failed', detail: error.message }, { status: 500 });
+    }
+    if (!page || page.length === 0) break;
+    exams.push(...(page as unknown as ExamRec[]));
+    if (page.length < PAGE) break;
   }
 
   // 학교명 매칭 (정확히 일치)
