@@ -272,6 +272,45 @@ function getProxiedImageUrl(url: string): string {
 }
 
 // ============================================================================
+/** idx 앞에서 열린 표(tabular/array)가 안 닫혔는가 */
+function insideTabular(text: string, idx: number): boolean {
+  const before = text.slice(0, idx);
+  const open = (before.match(/\\begin\{(?:tabular|array)\}/g) || []).length;
+  const close = (before.match(/\\end\{(?:tabular|array)\}/g) || []).length;
+  return open > close;
+}
+
+/**
+ * 배점 배지 자리 (가드 #4 — FigureMarkerRenderer·ProblemCardView 두 splitAtQuestion 이 같이 쓴다).
+ *   1) $…$ 밖·표 밖의 첫 '?' 직후  2) 없으면 지시어(~시오/하라/여라/구하라)로 끝나 줄끝인 첫 문장 직후(표 밖)  3) -1
+ *   ★ 표 안의 '?' 를 잡으면 \begin{tabular} 가 반으로 갈려 표가 통째로 인라인 글자로 풀리고 배지가 대화 중간에 박힌다
+ *     (2026-11-04 온천중 25-1-2-F #22 교사·학생 대화 상자 「몇 개일까요?」). 표 안은 건너뛴다.
+ */
+function findBadgeSplitEnd(text: string): number {
+  let inBlock = false;
+  let inInline = false;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\\') {
+      if (text.startsWith('\\begin{tabular}', i) || text.startsWith('\\begin{array}', i)) depth++;
+      else if (text.startsWith('\\end{tabular}', i) || text.startsWith('\\end{array}', i)) depth = Math.max(0, depth - 1);
+    }
+    const ch = text[i];
+    const next = text[i + 1];
+    if (ch === '$' && next === '$') { inBlock = !inBlock; i++; continue; }
+    if (ch === '$' && !inBlock) { inInline = !inInline; continue; }
+    if (ch === '?' && !inBlock && !inInline && depth === 0) return i + 1;
+  }
+  // '?' 없을 때 — 지시어로 끝나는 문장이 줄끝/텍스트끝인 첫 위치 뒤 (ExamProblemRenderer 와 동일 directiveRe).
+  //   기존엔 "첫 줄"만 봐서 지문/표 뒤 질문 서답형(쇼핑몰류)에서 배지가 소문제·박스 끝에 붙던 사고.
+  const directiveRe = /(?:시오|하라|여라|구하라)\s*[.?]?(?=\s*(?:\n|$))/g;
+  let dm: RegExpExecArray | null;
+  while ((dm = directiveRe.exec(text)) !== null) {
+    if (!insideTabular(text, dm.index)) return dm.index + dm[0].length;
+  }
+  return -1;
+}
+
 /** 그림 사이에만 있는 화살표 한 개(→ ⇒ $\rightarrow$ …) — 그림 나열 런을 끊지 않는다 */
 function isFigConnector(p: { type: string; text?: string }): boolean {
   if (p.type !== 'text' || !p.text) return false;
@@ -301,29 +340,10 @@ function FigureMarkerRenderer({
   // ★ 텍스트의 첫 '?' / 첫 줄 끝 / 텍스트 끝 순으로 배지 자리 찾기 ($...$ 수식 외부만)
   //   서답형 헤더가 ".으로 끝나고 [도형] 마커가 따로 있는 케이스 (신도중 [서·논술형 6·7])
   //   처럼 '?'가 없으면 첫 \n 직전에, 그것도 없으면 마지막에 배지 박는다.
+  //   ★ 가드 #4: 아래 ProblemCardView 의 splitAtQuestion 과 같은 findBadgeSplitEnd 를 쓴다 (두 벌 동시 패치 원칙).
   const splitAtQuestion = (text: string): [string, string, boolean] => {
-    let inBlock = false;
-    let inInline = false;
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i];
-      const next = text[i + 1];
-      if (ch === '$' && next === '$') { inBlock = !inBlock; i++; continue; }
-      if (ch === '$' && !inBlock) { inInline = !inInline; continue; }
-      if (ch === '?' && !inBlock && !inInline) {
-        return [text.slice(0, i + 1), text.slice(i + 1), true];
-      }
-    }
-    // ★ '?' 없을 때 — 본문 어디서든 지시어(~시오/하라/여라/구하라)로 끝나는 문장이 줄끝/텍스트끝인
-    //   첫 위치 뒤에 배지. (ExamProblemRenderer.splitAtFirstQuestionMark 와 동일 — 가드 #4 동기화).
-    //   기존엔 "첫 줄"만 봐서 지문/표 뒤에 질문 오는 서답형(쇼핑몰류: 표\n…구하시오\n(1)…)에서
-    //   배지가 소문제·보기/표 박스 끝에 붙던 사고 해결. "의 해는" 등 비지시어 뒤 오삽입 회귀 없음.
-    const directiveRe = /(?:시오|하라|여라|구하라)\s*[.?]?(?=\s*(?:\n|$))/;
-    const dm = directiveRe.exec(text);
-    if (dm) {
-      const end = dm.index + dm[0].length;
-      return [text.slice(0, end), text.slice(end), true];
-    }
-    return [text, '', false];
+    const end = findBadgeSplitEnd(text);
+    return end < 0 ? [text, '', false] : [text.slice(0, end), text.slice(end), true];
   };
   let badgeInserted = false;
   // 텍스트 파트를 렌더하면서 배지 인라인 주입
@@ -1332,27 +1352,10 @@ function ProblemCardView({
                 //   2) 없으면 첫 줄 끝 (\n 직전) — 서답형 헤더 라인 ("[서·논술형 4] 식을 간단히 하시오.") 끝에 자연스럽게 배지 부착.
                 //      ★ 이전엔 "?"가 없으면 content 전체 끝에 박혀 [4-3] 마지막 라인 끝에 [N점] 배지가 붙는 사고.
                 //   3) 첫 줄도 없으면 content 끝 (single-line 본문)
+                //   ★ 가드 #4: FigureMarkerRenderer 와 같은 findBadgeSplitEnd (두 벌 동시 패치 원칙).
                 const splitAtQuestion = (text: string): [string, string, boolean] => {
-                  let inBlock = false;
-                  let inInline = false;
-                  for (let i = 0; i < text.length; i++) {
-                    const ch = text[i];
-                    const next = text[i + 1];
-                    if (ch === '$' && next === '$') { inBlock = !inBlock; i++; continue; }
-                    if (ch === '$' && !inBlock) { inInline = !inInline; continue; }
-                    if (ch === '?' && !inBlock && !inInline) {
-                      return [text.slice(0, i + 1), text.slice(i + 1), true];
-                    }
-                  }
-                  // ★ '?' 없을 때 — 지시어(~시오/하라/여라/구하라)로 끝나는 문장이 줄끝/텍스트끝인 첫
-                  //   위치 뒤에 배지. (ExamProblemRenderer 와 동일 directiveRe — 가드 #4 동기화). 기존엔
-                  //   "첫 줄"만 봐서 지문/표 뒤 질문 서답형(쇼핑몰류)에서 배지가 소문제·박스 끝에 붙던 사고.
-                  const directiveRe = /(?:시오|하라|여라|구하라)\s*[.?]?(?=\s*(?:\n|$))/;
-                  const dm = directiveRe.exec(text);
-                  if (dm) {
-                    return [text.slice(0, dm.index + dm[0].length), text.slice(dm.index + dm[0].length), true];
-                  }
-                  return [text, '', false];
+                  const end = findBadgeSplitEnd(text);
+                  return end < 0 ? [text, '', false] : [text.slice(0, end), text.slice(end), true];
                 };
 
                 if (hasFigureMarker) {
