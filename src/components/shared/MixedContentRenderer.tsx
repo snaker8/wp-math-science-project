@@ -60,9 +60,7 @@ function FitTable({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLSpanElement | null>(null);
   useFitToWidth(ref, 'table', [children], { apply: 'target' });
   return (
-    // ★ 흰 종이판 + 검은 글자 — PDF 에서 잘라 넣은 표 그림과 똑같이 보이게 (2026-11-04 대표 「랜더를 똑같이 하던지」).
-    //   다크 카드에서 표만 어두운 바탕에 회색 선으로 떠 있어 그림 표와 따로 놀았다. 인쇄(흰 종이)에선 차이 없음.
-    <span ref={ref} className="block my-3 max-w-full overflow-x-auto rounded-lg bg-white px-2 py-2 text-black">
+    <span ref={ref} className="block my-3 max-w-full overflow-x-auto">
       {children}
     </span>
   );
@@ -449,10 +447,10 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
         if (colCount >= 3) {
           while (titleRows < el.rows.length - 1 && el.rows[titleRows][0]?.trim() && el.rows[titleRows].slice(1).every((c) => !c.trim())) titleRows++;
         }
-        const cellCls = colCount === 1 ? 'px-4 py-1 text-center' : 'px-3 py-1.5 text-center border border-gray-800';
+        const cellCls = colCount === 1 ? 'px-4 py-1 text-center' : 'px-3 py-1.5 text-center border border-gray-500';
         return (
           <FitTable key={i}>
-            <table className={`border-collapse mx-auto text-sm ${colCount === 1 ? 'border border-gray-800' : ''}`} style={{ maxWidth: '100%' }}>
+            <table className={`border-collapse mx-auto text-sm ${colCount === 1 ? 'border-2 border-gray-500' : ''}`} style={{ maxWidth: '100%' }}>
               <tbody>
                 {el.rows.map((row, ri) => (
                   <tr key={ri}>
