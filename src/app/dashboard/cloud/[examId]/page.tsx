@@ -272,6 +272,13 @@ function getProxiedImageUrl(url: string): string {
 }
 
 // ============================================================================
+/** 그림 사이에만 있는 화살표 한 개(→ ⇒ $\rightarrow$ …) — 그림 나열 런을 끊지 않는다 */
+function isFigConnector(p: { type: string; text?: string }): boolean {
+  if (p.type !== 'text' || !p.text) return false;
+  const t = p.text.replace(/\$/g, '').replace(/\s+/g, '');
+  return /^(?:\\(?:long)?(?:right|Right|left|Left|leftright|Leftright)arrow|\\to|[→⇒⇨➡←⇐↔⟶])$/.test(t);
+}
+
 // FigureMarkerRenderer — [도형] / [도형:right:40%] 마커 기반 렌더링
 // 라인 모드: 기존 블록 사이 삽입 / 플로트 모드: CSS float로 텍스트 감싸기
 // ============================================================================
@@ -369,9 +376,16 @@ function FigureMarkerRenderer({
     let fIdx = 0;
     for (let pi = 0; pi < contentParts.length; pi++) {
       if (contentParts[pi].type !== 'figure') continue;
+      // ★ 그림 사이의 화살표(→ ⇒)는 런을 끊지 않는다 — 「[도형]$\rightarrow$[도형]」 (온천중 25-1-2-F #14)
       let runLen = 0;
-      while (pi + runLen < contentParts.length && contentParts[pi + runLen].type === 'figure') runLen++;
-      const nextPart = contentParts[pi + runLen];
+      let span = 0;
+      while (pi + span < contentParts.length) {
+        const q = contentParts[pi + span];
+        if (q.type === 'figure') { runLen++; span++; continue; }
+        if (isFigConnector(q) && contentParts[pi + span + 1]?.type === 'figure') { span++; continue; }
+        break;
+      }
+      const nextPart = contentParts[pi + span];
       const nextText = nextPart && nextPart.type === 'text' ? nextPart.text : '';
       // ★ 캡션 영역은 다음 소문제 "(1)" 전까지 — 그 뒤의 ①② 는 소문제 본문이라 캡션 아님
       //   (온천중 #22 ⑤⑥ 뒤에 (1)①② 가 붙어 마커수 불일치로 짝짓기 실패하던 사고). tail 은 텍스트로 보존.
@@ -387,10 +401,21 @@ function FigureMarkerRenderer({
       } else if (circled && circled.length === runLen) {
         caps = circled.map((s) => s.trim());
         nextPart.text = `${capZone.replace(/[①②③④⑤⑥⑦⑧⑨⑩][^①②③④⑤⑥⑦⑧⑨⑩]*/g, '').trim()} ${tail}`.trim();
+      } else if (runLen >= 2 && runLen <= 5) {
+        // ★ 캡션 글자가 없어도 본문이 그림을 (가)(나)… 로 가리키면 그 라벨을 그림 밑에 단다
+        //   (2026-11-04 온천중 25-1-2-F #11 — 원본은 전개도 밑 (가)·사각기둥 밑 (나)). 수학비서 HML 은 라벨을 그림에 안 넣는다.
+        //   조건: 라벨마다 「(가)는/와/의…」처럼 조사가 붙어 **지칭**으로 쓰였고, 「(가) 모든 …」처럼 줄 머리의 조건 항목이 아닐 것.
+        //   (조건 박스 (가)(나) 가 있는 문제에 그림 2개가 나열된 경우를 잘못 라벨링하지 않도록)
+        const labels = ['(가)', '(나)', '(다)', '(라)', '(마)'].slice(0, runLen);
+        const whole = contentParts.map((p) => (p.type === 'text' ? p.text : '')).join('\n');
+        const refers = (l: string) => new RegExp(`\\(${l[1]}\\)\\s*[는은와과의를을에이가도만로]`).test(whole);
+        const isItem = (l: string) => new RegExp(`(?:^|\\n)\\s*\\(${l[1]}\\)\\s`).test(whole);
+        const nextLabel = ['(가)', '(나)', '(다)', '(라)', '(마)', '(바)'][runLen];
+        if (labels.every((l) => refers(l) && !isItem(l)) && !whole.includes(nextLabel)) caps = labels;
       }
       for (let k = 0; k < runLen; k++) { figCaptions[fIdx + k] = caps[k] || ''; figIsInRun[fIdx + k] = runLen >= 2; }
       fIdx += runLen;
-      pi += runLen - 1;
+      pi += span - 1;
     }
   }
 
@@ -434,9 +459,6 @@ function FigureMarkerRenderer({
                 className="rounded-lg border border-zinc-600 bg-white max-h-32 object-contain shadow-sm"
                 loading="lazy"
               />
-              {figCaptions[currentFigureIdx] && (
-                <span className="text-[11px] text-content-secondary mt-1 text-center leading-snug">{figCaptions[currentFigureIdx]}</span>
-              )}
             </span>
           ) : (
             <div key={i} className="my-2 flex justify-center">
@@ -548,21 +570,49 @@ function FigureMarkerRenderer({
   }
 
   // ═══ 라인 모드 렌더링 ═══
-  return (
-    <div className="inline">
-      {contentParts.map((part, i) => {
-        if (part.type === 'text') {
-          // ★ 캡션 추출로 비워진 텍스트는 스킵(빈 content → "(문제 내용 없음)" 표시되던 사고).
-          if (!part.text || !part.text.trim()) return null;
-          // ★ 그림 나열(multiFig)에선 텍스트를 block 으로 — inline 이면 그림 뒤 텍스트("(1)" 등)가
-          //   그림 옆으로 흘러 붙음. block 이면 그림 아래 줄로 떨어짐.
-          return renderTextWithBadge(part.text, String(i), `${multiFig ? 'block' : 'inline'} text-sm text-content-secondary leading-relaxed`);
+  // ★ 연속 그림 런(2개↑)은 한 줄에 가운데 정렬로 묶고 그림마다 밑에 캡션 — 왼쪽으로 쏠려 균형이 안 맞던 것
+  //   (2026-11-04 대표 「그림 밑에 가,나 제대로 균형 있게」, 온천중 25-1-2-F #11).
+  const nodes: React.ReactNode[] = [];
+  for (let i = 0; i < contentParts.length; i++) {
+    const part = contentParts[i];
+    if (part.type === 'text') {
+      // ★ 캡션 추출로 비워진 텍스트는 스킵(빈 content → "(문제 내용 없음)" 표시되던 사고).
+      if (!part.text || !part.text.trim()) continue;
+      // ★ 그림 나열(multiFig)에선 텍스트를 block 으로 — inline 이면 그림 뒤 텍스트("(1)" 등)가
+      //   그림 옆으로 흘러 붙음. block 이면 그림 아래 줄로 떨어짐.
+      nodes.push(renderTextWithBadge(part.text, String(i), `${multiFig ? 'block' : 'inline'} text-sm text-content-secondary leading-relaxed`));
+      continue;
+    }
+    if (figIsInRun[figureCounter] && !part.widthPercent) {
+      const items: React.ReactNode[] = [];
+      while (i < contentParts.length) {
+        const q = contentParts[i];
+        // 그림 사이 화살표 → 런 안에서 가운데 글자로
+        if (isFigConnector(q) && contentParts[i + 1]?.type === 'figure' && figIsInRun[figureCounter] && items.length > 0) {
+          items.push(<div key={`c-${i}`} className="self-center text-base text-content-secondary"><MixedContentRenderer content={q.type === 'text' ? q.text.trim() : ''} inline /></div>);
+          i++;
+          continue;
         }
-        // figure 파트 — figureCounter로 순서 매칭
-        return renderFigurePart(part, i, figureCounter++);
-      })}
-    </div>
-  );
+        if (!(q.type === 'figure' && figIsInRun[figureCounter] && !q.widthPercent)) break;
+        const idx = figureCounter++;
+        items.push(
+          <div key={i} className="flex flex-col items-center">
+            {renderFigurePart(contentParts[i], i, idx)}
+            {figCaptions[idx] && <span className="mt-1 text-center text-[12px] leading-snug text-content-secondary">{figCaptions[idx]}</span>}
+          </div>
+        );
+        i++;
+      }
+      i--;
+      // ★ 그림 2~3개(「(가)(나)」·「→」 짝)만 가운데 정렬. 4개↑ 나열(온천중 #21/#22 [N개] 격자)은 종전처럼 왼쪽부터 흐름 — 회귀 방지.
+      const few = items.filter((n) => React.isValidElement(n) && !String(n.key).startsWith('c-')).length <= 3;
+      nodes.push(<div key={`run-${i}`} className={`my-2 flex flex-wrap items-end gap-x-6 gap-y-2 ${few ? 'justify-center' : 'justify-start'}`}>{items}</div>);
+      continue;
+    }
+    // figure 파트 — figureCounter로 순서 매칭
+    nodes.push(renderFigurePart(part, i, figureCounter++));
+  }
+  return <div className="inline">{nodes}</div>;
 }
 
 // ============================================================================

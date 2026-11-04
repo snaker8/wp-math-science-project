@@ -137,7 +137,11 @@ export function extractConditionBoxes(text: string): { mainContent: string; cond
     // ★ 장식 문자: _, -, ─, —, =, $, \, . (Mathpix가 $\_\_\_\_$ 형식으로 출력)
     const boxHeaderLabel = detectBoxHeaderLabel(trimmed);
     const isBoxHeader = boxHeaderLabel !== null;
-    const isConditionStart = /^\s*[\(（]\s*[가나다라마]\s*[\)）]/.test(trimmed) ||
+    // ★ 2026-11-04 (온천중 25-1-2-F #11): 「(가)는 … 전개도이다. (나)는 … x의 값은?」 처럼 (가)(나)가
+    //   그림을 가리키는 **문제 문장**이면 박스가 아니다 — 본문 전체가 조건 박스로 감싸였다.
+    //   라벨 바로 뒤에 조사(는·은·와·과·의·를·을·에·이·가·도·만·로)가 붙으면 지칭(문장)으로 본다.
+    //   조건 항목은 「(가) 모든 실수 x에 대하여…」처럼 라벨 뒤에 바로 내용이 온다.
+    const isConditionStart = /^\s*[\(（]\s*[가나다라마]\s*[\)）](?!\s*[는은와과의를을에이가도만로](?:[\s,.]|$))/.test(trimmed) ||
                              isBoxHeader ||
                              /^\s*(?:\\displaystyle\s*)?[ㄱㄴㄷㄹㅁ]\s*[.)]/.test(trimmed);
 
