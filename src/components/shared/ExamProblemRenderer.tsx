@@ -354,15 +354,26 @@ function ExamProblemRendererInner({
   const splitAtFirstQuestionMark = (text: string): [string, string, boolean] => {
     let inDollar = false;
     let inSingleDollar = false;
+    // ★ 표(tabular/array) 안의 '?' 는 건너뛴다 — 잡으면 표가 반으로 갈려 인라인 글자로 풀리고 배지가 대화 중간에 박힘
+    //   (2026-11-04 온천중 25-1-2-F #22 교사·학생 대화 상자). 카드(cloud/[examId] findBadgeSplitEnd)와 동일 — 가드 #4.
+    let tableDepth = 0;
+    const insideTable = (idx: number) => {
+      const before = text.slice(0, idx);
+      return (before.match(/\\begin\{(?:tabular|array)\}/g) || []).length > (before.match(/\\end\{(?:tabular|array)\}/g) || []).length;
+    };
     for (let i = 0; i < text.length; i++) {
       const ch = text[i];
       const next = text[i + 1];
+      if (ch === '\\') {
+        if (text.startsWith('\\begin{tabular}', i) || text.startsWith('\\begin{array}', i)) tableDepth++;
+        else if (text.startsWith('\\end{tabular}', i) || text.startsWith('\\end{array}', i)) tableDepth = Math.max(0, tableDepth - 1);
+      }
       // $$ (block math) 진입/종료
       if (ch === '$' && next === '$') { inDollar = !inDollar; i++; continue; }
       // 단일 $ 진입/종료 (블록 모드 아닐 때만)
       if (ch === '$' && !inDollar) { inSingleDollar = !inSingleDollar; continue; }
-      // 수식 밖의 '?'만 매칭 — 있으면 그 뒤에 배지
-      if (ch === '?' && !inDollar && !inSingleDollar) {
+      // 수식 밖·표 밖의 '?'만 매칭 — 있으면 그 뒤에 배지
+      if (ch === '?' && !inDollar && !inSingleDollar && tableDepth === 0) {
         return [text.slice(0, i + 1), text.slice(i + 1), true];
       }
     }
@@ -373,9 +384,10 @@ function ExamProblemRendererInner({
     //     따라오는 경우, 배지가 맨 끝(따라서…결론줄)이 아니라 명령문 뒤에 붙음(사용자 보고 수정).
     //   - 3번류 "연립방정식{…}\n의 해는\n…구하시오." → 지시어가 맨 끝이라 결과적으로 텍스트 끝에 부착(불변).
     //   '지시어+줄끝/텍스트끝' 조건이라 "의 해는" 같은 비지시어 뒤 오삽입 회귀 없음(단순 첫-\n 폴백 금지).
-    const directiveRe = /(?:시오|하라|여라|구하라)\s*[.?]?(?=\s*(?:\n|$))/;
-    const dm = directiveRe.exec(text);
-    if (dm) {
+    const directiveRe = /(?:시오|하라|여라|구하라)\s*[.?]?(?=\s*(?:\n|$))/g;
+    let dm: RegExpExecArray | null;
+    while ((dm = directiveRe.exec(text)) !== null) {
+      if (insideTable(dm.index)) continue;
       const end = dm.index + dm[0].length;
       return [text.slice(0, end), text.slice(end), true];
     }

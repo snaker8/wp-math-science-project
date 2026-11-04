@@ -58,24 +58,40 @@ function normalizeChoice(c: string, idx: number): string {
  *   우선순위: [총 N점] > 다수 [Ni점] 합산 > 단일 [N점] > null.
  *   OCR 오타 점/졈/졍 허용. 추출 후 본문 텍스트에서 [총 N점]·[N점] 모두 제거(배지로만 표시).
  */
-function extractPoints(content: string): { points: number | null; cleaned: string } {
+export function extractPoints(content: string): { points: number | null; cleaned: string; subPoints?: Array<{ number: string; points: number }> } {
   const totalRe = /[\[(]\s*총\s*(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]/;
   const singleRe = /[\[(]\s*(\d+(?:\.\d+)?)\s*[점졈졍]\s*[\])]/g;
   let points: number | null = null;
+  let subPoints: Array<{ number: string; points: number }> | undefined;
   const tm = content.match(totalRe);
   if (tm) {
     points = parseFloat(tm[1]);
   } else {
-    const all = [...content.matchAll(singleRe)].map((m) => parseFloat(m[1])).filter((n) => Number.isFinite(n));
+    const singles = [...content.matchAll(singleRe)].map((m) => ({ v: parseFloat(m[1]), idx: m.index ?? 0 })).filter((s) => Number.isFinite(s.v));
+    const all = singles.map((s) => s.v);
     if (all.length === 1) points = all[0];
     else if (all.length > 1) points = all.reduce((a, b) => a + b, 0);
+    // ★ 소문제별 배점 보존 (2026-11-04 온천중 25-1-2-F #22 「(1) … [4점] (2) … [4점]」):
+    //   종전엔 합산(8)만 남기고 [4점] 둘 다 본문에서 지워 카드 「소문제별 답·배점」이 비었다.
+    //   순차 (1)(2)… 마커마다 [N점] 이 정확히 하나씩 뒤따를 때만 answer_json.subQuestions 로 넘긴다.
+    if (singles.length > 1) {
+      const markers: Array<{ num: string; idx: number }> = [];
+      let expect = 1;
+      for (const m of content.matchAll(/\((\d)\)/g)) {
+        if (parseInt(m[1], 10) === expect) { markers.push({ num: m[1], idx: m.index ?? 0 }); expect++; }
+      }
+      if (markers.length === singles.length) {
+        const per = markers.map((mk, k) => singles.filter((s) => s.idx > mk.idx && s.idx < (markers[k + 1]?.idx ?? Infinity)));
+        if (per.every((a) => a.length === 1)) subPoints = markers.map((mk, k) => ({ number: mk.num, points: per[k][0].v }));
+      }
+    }
   }
   const cleaned = content
     .replace(/[\[(]\s*(?:총\s*)?\d+(?:\.\d+)?\s*[점졈졍]\s*[\])]/g, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{2,}/g, '\n')
     .trim();
-  return { points, cleaned };
+  return { points, cleaned, subPoints };
 }
 
 export async function createExamFromHml(
@@ -202,6 +218,10 @@ export async function createExamFromHml(
     // ★ 원본 보기 배치 — 자산화 기본 세팅을 원본과 같게 (OCR 과 동일). 수동 변경은 그대로 우선.
     if (typeof p.choiceLayout === 'number') {
       answer_json.choiceLayout = p.choiceLayout;
+    }
+    // ★ 소문제별 배점 — 카드 SubQuestionTable(answer_json.subQuestions) 과 같은 꼴. 답은 비워 둔다.
+    if (!isObj && pointsData[i].subPoints) {
+      answer_json.subQuestions = pointsData[i].subPoints!.map((s) => ({ number: s.number, answer: '', points: s.points }));
     }
 
     // ── 그림 dataURL → Storage 업로드 → public URL. (실패 시 null)
