@@ -79,7 +79,9 @@ function FitTable({ children }: { children: React.ReactNode }) {
  */
 function TableCell({ cell }: { cell: string }) {
   const t = cell.trim();
-  if (!t) return <span className="text-gray-300">□</span>;
+  // 빈 셀은 비워 둔다. 예전엔 회색 □ 를 찍었는데, 수학비서(HML) 표는 줄기와 잎처럼 빈 셀을 배치용으로 쓴다
+  // → 표 전체에 □ 가 깔렸다 (2026-11-04 대표 지적, 사직중 16번). 진짜 빈칸 네모는 데이터에 \square·\boxed 로 온다.
+  if (!t) return <span>{' '}</span>;
   const hasHangul = /[가-힣]/.test(t);
   const hasNestedTable = t.includes('\\begin{tabular}') || t.includes('\\begin{array}');
   if (hasHangul && !hasNestedTable) {
@@ -429,6 +431,39 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
               </div>
             </div>
           </span>
+        );
+      }
+
+      // ═══ 옛 HML 표: 열마다 세로줄(|l|l|…|)인데 \hline 이 하나도 없다 ═══
+      // ★ 2026-11-04 대표 「제대로 네모 박스로 표현을 하던지」 (사직중 16번 줄기와 잎·17번 자료표).
+      //   9월 초 HML 파서가 \hline 없이 저장한 표(실측 133건)는 세로줄만 그어져 칸이 안 보였다.
+      //   원본(한글)은 칸마다 테두리가 있는 표다 → 격자로 그린다. 1열이면 바깥 테두리만(문단 줄 박스).
+      //   맨 앞의 「첫 칸만 있는 줄」(표 제목·범례 — 휴대 전화 이용 시간, (0|6은 6시간))은 한 칸으로 합친다.
+      const colCount = Math.max(...el.rows.map((r) => r.length));
+      const isOldHmlGrid = !el.spans && !el.hasHlines.some(Boolean) && colCount >= 1
+        && Array.from({ length: colCount + 1 }, (_, k) => k).every((k) => vLines.includes(k));
+      if (isOldHmlGrid) {
+        let titleRows = 0;
+        if (colCount >= 3) {
+          while (titleRows < el.rows.length - 1 && el.rows[titleRows][0]?.trim() && el.rows[titleRows].slice(1).every((c) => !c.trim())) titleRows++;
+        }
+        const cellCls = colCount === 1 ? 'px-4 py-1 text-center' : 'px-3 py-1.5 text-center border border-gray-500';
+        return (
+          <FitTable key={i}>
+            <table className={`border-collapse mx-auto text-sm ${colCount === 1 ? 'border-2 border-gray-500' : ''}`} style={{ maxWidth: '100%' }}>
+              <tbody>
+                {el.rows.map((row, ri) => (
+                  <tr key={ri}>
+                    {ri < titleRows
+                      ? <td colSpan={colCount} className={cellCls}><TableCell cell={row[0]} /></td>
+                      : Array.from({ length: colCount }, (_, ci) => (
+                          <td key={ci} className={cellCls}><TableCell cell={row[ci] ?? ''} /></td>
+                        ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </FitTable>
         );
       }
 
