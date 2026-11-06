@@ -139,6 +139,7 @@ function applySourceCategoryOverride(
 import { isSharedLibraryMode } from '@/lib/security/institute-guard';
 import type { SubjectTrack } from '@/types/track';
 import { findDuplicateExams } from '@/lib/workflow/exam-duplicate-guard';
+import { shouldBlockPreviewExam, previewExamBlockMessage } from '@/lib/workflow/exam-preview-guard';
 
 // In-memory job storage (globalThis로 개발서버 hot-reload 시에도 유지)
 // 실제 프로덕션에서는 Redis 또는 DB 사용 권장
@@ -1602,6 +1603,20 @@ async function saveEditedProblemsDirect(
   // 파일명에서 과목/유형/학년 자동 추출 (공통 유틸 사용)
   const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
 
+  // ★ 예상 문제지 차단 (2026-11-06 「미리보는 중간」 사고) — saveProblemsToDB 와 동일 가드, 두 곳 동시 패치.
+  //   새 exam 을 만들기 전에 막는다 (append 는 기존 시험지라 해당 없음). 시중교재 명시만 통과.
+  if (!job.appendToExamId) {
+    const previewMarker = shouldBlockPreviewExam(sourceCategory, job.fileName);
+    if (previewMarker) {
+      return NextResponse.json({
+        success: false,
+        error: previewExamBlockMessage(previewMarker, job.fileName),
+        problemCount: 0,
+        examId: null,
+      }, { status: 422 });
+    }
+  }
+
   // ★ subject_track 결정 — 시험지 제목 기반. 시험지·모든 문제 같은 트랙으로 박힘.
   //   isScienceSubject 매치 안 되면 'math' fallback (수학 라인 보호).
   //   feature flag false 여도 컬럼은 채워둠 — 추후 활성 시 즉시 분리됨.
@@ -2480,6 +2495,16 @@ async function saveProblemsToDB(
   // ★ fileTitle / 학교 단원집 메타를 함수 스코프로 hoist (problems INSERT 루프에서도 사용)
   const fileTitle = job.fileName.replace(/\.[^/.]+$/, '');
   const resolvedSchoolMeta = fillSchoolMetaFromTitle(schoolMeta || {}, fileTitle);
+
+  // ★ 예상 문제지 차단 (2026-11-06 「미리보는 중간」 사고) — saveEditedProblemsDirect 와 동일 가드, 두 곳 동시 패치.
+  //   exam 도 problems 도 만들지 않고 끝낸다 (orphan 0). 시중교재 명시만 통과.
+  if (!job.appendToExamId) {
+    const previewMarker = shouldBlockPreviewExam(sourceCategory, job.fileName);
+    if (previewMarker) {
+      console.error(`[DB] ${previewExamBlockMessage(previewMarker, job.fileName)}`);
+      return;
+    }
+  }
 
   // 1. Exam 레코드 생성 (클라우드 그룹핑용, 시험지관리에는 미표시)
   // 003_exams.sql 마이그레이션 스키마 기준 컬럼만 사용
