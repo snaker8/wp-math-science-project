@@ -12,6 +12,7 @@ import { verifyHmlProblem } from './hml-verify';
 import { findAutoFolderForCurriculum } from '@/lib/utils/auto-folder';
 import { parseExamTitleMeta } from './exam-title-meta';
 import { findDuplicateExams, describeIdentity, examIdentityFromTitle } from './exam-duplicate-guard';
+import { shouldBlockPreviewExam, previewExamBlockMessage } from './exam-preview-guard';
 
 export interface HmlSaveContext {
   createdBy: string;                 // 필수 (exams.created_by NOT NULL)
@@ -103,6 +104,13 @@ export async function createExamFromHml(
   if (!parsed.problems.length) return { ok: false, error: '추출된 문제가 없습니다' };
 
   const title = ctx.title.trim();
+
+  // ── 예상 문제지 차단 (2026-11-06 현대청운고 「미리보는 중간」 사고) ──
+  //   파일명·제목에 예상 문제지 표시가 있으면 학교기출로 저장하지 않는다. 시중교재 명시만 통과.
+  const previewMarker = shouldBlockPreviewExam(ctx.sourceCategory, ctx.sourceName, title);
+  if (previewMarker) {
+    return { ok: false, error: previewExamBlockMessage(previewMarker, ctx.sourceName || title) };
+  }
 
   // ── 폴더 자동배치 — 명시 폴더(열어둔 폴더) 우선, 없으면 선택한 curriculumCodes(공통수학1 등)로
   //   폴더 찾기. 폴더는 미리 존재 전제(없으면 미배치, 생성 X). PDF 업로드 경로와 동일 정책.
