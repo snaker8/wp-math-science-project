@@ -159,7 +159,10 @@ export default function SchoolReportPage() {
       setAggLoading(false);
     }
   };
-  const aggShareQuery = aggIds.length ? `examIds=${aggIds.join(',')}` : null;
+  // ★ 공개 링크에 학원 표기·디자인 파라미터를 같이 붙인다 (비로그인 학부모는 세션이 없어 서버가 학원을 못 안다)
+  const aggShareQuery = aggIds.length
+    ? `examIds=${aggIds.join(',')}${agg?.shareParams ? `&brand=${encodeURIComponent(agg.shareParams.brand)}${agg.shareParams.org ? `&org=${encodeURIComponent(agg.shareParams.org)}` : ''}` : ''}`
+    : null;
   const aggDirty = agg != null && (aggIds.length !== selected.size || aggIds.some((id) => !selected.has(id)));
 
   useEffect(() => {
