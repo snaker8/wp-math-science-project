@@ -56,6 +56,8 @@ interface SchoolRow {
   avgDifficulty: number | null;
   stdDevDifficulty: number | null;
   topUnits: Array<{ level1Name: string; problemCount: number }>;
+  /** 학교의 단원별 문항 수 전체 (단원 출제 표용, 2026-11-07) */
+  unitCounts: Array<{ level1Name: string; problemCount: number }>;
 }
 
 interface PitfallRow {
@@ -82,6 +84,8 @@ interface ExamRow {
   createdAt: string;
   /** 이 시험지에서 많이 나온 단원 TOP 3 — 학교 1곳 리포트의 연도별 비교용 (2026-11-07) */
   topUnits: Array<{ level1Name: string; problemCount: number }>;
+  /** 이 시험지의 단원별 문항 수 전체 (단원 출제 표용) */
+  unitCounts: Array<{ level1Name: string; problemCount: number }>;
 }
 
 interface UnitTrend {
@@ -411,6 +415,9 @@ export async function GET(request: NextRequest) {
         .map(([level1Name, problemCount]) => ({ level1Name, problemCount }))
         .sort((a, b) => b.problemCount - a.problemCount)
         .slice(0, 3),
+      unitCounts: Array.from(examUnitCounts.entries())
+        .map(([level1Name, problemCount]) => ({ level1Name, problemCount }))
+        .sort((a, b) => b.problemCount - a.problemCount),
     });
   }
 
@@ -450,10 +457,10 @@ export async function GET(request: NextRequest) {
   const schoolBreakdown: SchoolRow[] = Array.from(schoolMap.entries())
     .map(([school, s]) => {
       const { avg, std } = stat(s.examAvgs);
-      const topUnits = Array.from(s.unitCounts.entries())
+      const unitCounts = Array.from(s.unitCounts.entries())
         .map(([level1Name, problemCount]) => ({ level1Name, problemCount }))
-        .sort((a, b) => b.problemCount - a.problemCount)
-        .slice(0, 3);
+        .sort((a, b) => b.problemCount - a.problemCount);
+      const topUnits = unitCounts.slice(0, 3);
       return {
         school,
         examCount: s.examIds.size,
@@ -462,6 +469,7 @@ export async function GET(request: NextRequest) {
         avgDifficulty: avg,
         stdDevDifficulty: std,
         topUnits,
+        unitCounts,
       };
     })
     .sort((a, b) => a.school.localeCompare(b.school));
@@ -615,14 +623,22 @@ export async function GET(request: NextRequest) {
       ? ` ${filterExamType === '중간' || filterExamType === '기말' ? `${filterExamType}고사` : filterExamType}`
       : ' 시험';
     const yearLabel = filterYear ? `${filterYear}학년도` : '최근';
+    // ★ 학교 1곳(학교 상세에서 시험지를 골라 만든 리포트)은 "1개 학교" 대신 학교 이름과 연도 범위로 말한다 (2026-11-07)
+    const singleSchool = totalSchools === 1 ? Array.from(matchedSchools)[0] : null;
+    const yearsAsc = Array.from(new Set(matchedExams.map((e) => e.meta.year).filter((y): y is number => y != null))).sort((a, b) => a - b);
+    const spanLabel = yearsAsc.length >= 2 ? `${yearsAsc[0]}년부터 ${yearsAsc[yearsAsc.length - 1]}년까지` : yearsAsc.length === 1 ? `${yearsAsc[0]}년` : '';
     narrative.push({
       heading: '이번 분석의 한 줄 요약',
       paragraphs: [
-        `${yearLabel}${subjLabel}${semLabel}${typeLabel}${typeLabel.endsWith("시험") ? "을" : "를"} ${totalSchools}개 학교 ${matchedExams.length}건 시험지(총 ${totalProblems}문항) 단위로 비교했습니다. ${
-          classifiedProblems === totalProblems
-            ? '모든 문항이 단원·난이도 분류 완료'
-            : `${classifiedProblems}/${totalProblems}문항 분류 완료`
-        }됐고, 아래 단원 분포·난이도 분포·학교별 비교를 함께 보시면 학교별 출제 성향이 한눈에 잡힙니다.`,
+        singleSchool
+          ? `${singleSchool} ${spanLabel ? `${spanLabel} ` : ''}시험지 ${matchedExams.length}장(총 ${totalProblems}문항)을 연도별로 나란히 놓고 비교했습니다. ${
+              classifiedProblems === totalProblems ? '모든 문항이 단원·난이도 분류 완료' : `${classifiedProblems}/${totalProblems}문항 분류 완료`
+            }됐고, 아래 연도별 난이도 흐름과 단원 출제 표를 함께 보시면 이 학교가 무엇을 어떻게 내는지 잡힙니다.`
+          : `${yearLabel}${subjLabel}${semLabel}${typeLabel}${typeLabel.endsWith("시험") ? "을" : "를"} ${totalSchools}개 학교 ${matchedExams.length}건 시험지(총 ${totalProblems}문항) 단위로 비교했습니다. ${
+              classifiedProblems === totalProblems
+                ? '모든 문항이 단원·난이도 분류 완료'
+                : `${classifiedProblems}/${totalProblems}문항 분류 완료`
+            }됐고, 아래 단원 분포·난이도 분포·학교별 비교를 함께 보시면 학교별 출제 성향이 한눈에 잡힙니다.`,
       ],
     });
   }
@@ -645,7 +661,7 @@ export async function GET(request: NextRequest) {
       heading: '평균 난이도와 해석',
       paragraphs: [
         `시험지 평균은 ${overall.avg.toFixed(2)}/10 (${band?.label ?? '-'})${
-          overall.std != null ? `, 시험지 간 편차는 σ ${overall.std.toFixed(2)}` : ''
+          overall.std != null ? `, 시험지 간 편차는 ±${overall.std.toFixed(2)}` : ''
         }로 집계되었습니다.`,
         interp,
       ],
@@ -653,20 +669,30 @@ export async function GET(request: NextRequest) {
   }
 
   // 3. 공통 단원 — 모든 학교가 출제한 단원
-  const universalUnits = unitFrequency.filter(
-    (u) => totalSchools > 0 && u.schoolCount === totalSchools
-  );
+  // ★ 학교 1곳이면 "모든 학교" 가 아니라 "모든 시험지(매년)" 기준으로 본다
+  const universalUnits = totalSchools === 1
+    ? unitFrequency.filter((u) => matchedExams.length >= 2 && u.examCount === matchedExams.length)
+    : unitFrequency.filter((u) => totalSchools > 0 && u.schoolCount === totalSchools);
   if (universalUnits.length > 0) {
     const top = universalUnits.slice(0, 3).map((u) => u.level1Name);
-    narrative.push({
-      heading: `${totalSchools}/${totalSchools}곳 학교 모두 출제한 핵심 단원`,
-      paragraphs: [
-        `${top.join(' · ')}${
-          universalUnits.length > 3 ? ` 외 ${universalUnits.length - 3}개 단원` : ''
-        }은 매칭된 모든 학교가 빠짐없이 출제했습니다.`,
-        '학교별로 출제 비중과 난이도만 다를 뿐 출제 자체를 건너뛰는 학교가 없으므로, 시험 대비에서 가장 먼저 마무리해야 할 1순위 영역입니다. 이 단원에서 점수를 잃으면 학교 평균 이하로 떨어질 위험이 높습니다.',
-      ],
-    });
+    const tail = universalUnits.length > 3 ? ` 외 ${universalUnits.length - 3}개 단원` : '';
+    narrative.push(
+      totalSchools === 1
+        ? {
+            heading: '매 시험 빠지지 않은 핵심 단원',
+            paragraphs: [
+              `${top.join(' · ')}${tail}은 비교한 ${matchedExams.length}장 시험지 모두에 출제됐습니다.`,
+              '해마다 비중과 난이도만 달라질 뿐 빠진 적이 없는 단원이므로, 시험 대비에서 가장 먼저 마무리해야 할 1순위 영역입니다. 이 단원에서 점수를 잃으면 평균 이하로 떨어질 위험이 높습니다.',
+            ],
+          }
+        : {
+            heading: `${totalSchools}/${totalSchools}곳 학교 모두 출제한 핵심 단원`,
+            paragraphs: [
+              `${top.join(' · ')}${tail}은 매칭된 모든 학교가 빠짐없이 출제했습니다.`,
+              '학교별로 출제 비중과 난이도만 다를 뿐 출제 자체를 건너뛰는 학교가 없으므로, 시험 대비에서 가장 먼저 마무리해야 할 1순위 영역입니다. 이 단원에서 점수를 잃으면 학교 평균 이하로 떨어질 위험이 높습니다.',
+            ],
+          },
+    );
   }
 
   // 4. 학교별 난이도 outlier
@@ -757,8 +783,8 @@ export async function GET(request: NextRequest) {
     narrative.push({
       heading: `시험지별 상세 분석 ${analyzedExamCount}건 — 깊이까지 들어가 보세요`,
       paragraphs: [
-        `매칭된 ${matchedExams.length}건 중 ${analyzedExamCount}건은 학교별로 단원 분포·고난도 문항 출제 의도·단계별 풀이 전략까지 분석이 완료된 상태입니다.`,
-        '이 통합 리포트는 큰 흐름을 보여드리고, 각 시험지를 클릭해 들어가시면 문항 단위 수식·풀이 과정·핵심 학습 전략까지 보실 수 있습니다 — 학교별 시험지 분석은 이 시스템의 가장 큰 강점입니다.',
+        `${matchedExams.length}장 중 ${analyzedExamCount}장은 단원 분포·고난도 문항의 출제 의도·단계별 풀이 전략까지 분석돼 있습니다.`,
+        '이 리포트는 큰 흐름을 보여 드리고, 각 시험지의 「상세 보기」로 들어가시면 문항 하나하나의 풀이 과정과 학습 전략까지 보실 수 있습니다.',
       ],
     });
   }

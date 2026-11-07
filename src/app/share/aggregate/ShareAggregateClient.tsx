@@ -1,142 +1,48 @@
 'use client';
 
 // ============================================================================
-// 학부모/블로그 공유용 집계 분석 리포트 (공개)
-// /share/aggregate?year=&grade=&semester=&examType=&schools=
+// 학부모 설명회·공유용 학교 기출 집계 리포트 (공개)
+// /share/aggregate?examIds=…  |  ?year=&grade=&semester=&examType=&schools=
 //
-// 인증 없이 접근. /share/exam/[token] 톤(크림+오렌지) 일관 — 친근한 학원 보고서.
-// 모든 수치는 DB raw aggregation. 시험지별 분석 인용은 출처 시험지명 명시.
-// 베테랑 강사 톤의 narrative 인사이트 + 시험지 상세 분석 진입 유도 CTA.
+// ★ 2026-11-07 재설계 — 시험지 상세 리포트(/share/exam/[token])와 같은 토큰(report.css --rp-*)을 써서
+//   학원 디자인(크림·네이비·포레스트…)이 두 리포트에 똑같이 입혀진다.
+//   - 학교 1곳: "한 문장 + 난이도 궤적" 히어로 → 연도별 시험지 카드(요약·고난도 문항 포함) → 단원 출제 표(연도×단원)
+//   - 학교 여러 곳: "한 문장 + 학교별 난이도 막대" → 학교 카드 → 단원 출제 표(학교×단원) → 난이도 분포 → 시험지 목록
+//   같은 시험지를 네 번 다르게 보여 주던 중복(막대·카드·접기·표)을 걷어냈다. 섹션 번호는 순서 정보가 아니라 뺐다.
+//   모든 수치는 API 집계값. 인용 문장은 출처 시험지로 연결.
 // ============================================================================
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import {
-  Printer,
-  Link2,
-  Check,
-  Loader2,
-  BookOpenText,
-  BarChart3,
-  PieChart,
-  TrendingUp,
-  Users,
-  Lightbulb,
-  AlertTriangle,
-  Sparkles,
-  ScrollText,
-} from 'lucide-react';
+import { Printer, Link2, Check, Loader2, AlertTriangle, Lightbulb, BarChart3, Grid3X3, Layers, ScrollText } from 'lucide-react';
+import '../exam/[token]/report.css';
+import './aggregate.css';
 
 // ─── 타입 ────────────────────────────────────────────────────────────────
+interface UnitRow { level1Code: string; level1Name: string; problemCount: number; examCount: number; schoolCount: number }
+interface ExamRow {
+  id: string; title: string; school: string; year: number | null; semester: 1 | 2 | null; examType: string | null;
+  problemCount: number; classifiedCount: number; avgDifficulty: number | null; hasAnalysis: boolean; shareToken: string | null;
+  createdAt: string; topUnits?: Array<{ level1Name: string; problemCount: number }>;
+  unitCounts?: Array<{ level1Name: string; problemCount: number }>;
+}
 interface AggregateResponse {
-  filters: {
-    year: number | null;
-    grade: string | null;
-    semester: 1 | 2 | null;
-    examType: string | null;
-    schools: string[] | null;
-  };
-  matched: {
-    schoolCount: number;
-    examCount: number;
-    analyzedExamCount: number;
-    problemCount: number;
-    classifiedProblemCount: number;
-  };
-  unitFrequency: Array<{
-    level1Code: string;
-    level1Name: string;
-    problemCount: number;
-    examCount: number;
-    schoolCount: number;
-  }>;
-  difficultyDist: {
-    examBandCounts: Array<{ band: string; hue: string; examCount: number }>;
-    overallAvg: number | null;
-    overallStdDev: number | null;
-    examWithAvgCount: number;
-  };
-  schoolBreakdown: Array<{
-    school: string;
-    examCount: number;
-    problemCount: number;
-    avgDifficulty: number | null;
-    stdDevDifficulty: number | null;
-    topUnits: Array<{ level1Name: string; problemCount: number }>;
-  }>;
-  exams: Array<{
-    id: string;
-    title: string;
-    school: string;
-    year: number | null;
-    semester: 1 | 2 | null;
-    examType: string | null;
-    problemCount: number;
-    classifiedCount: number;
-    avgDifficulty: number | null;
-    hasAnalysis: boolean;
-    shareToken: string | null;
-    createdAt: string;
-    topUnits?: Array<{ level1Name: string; problemCount: number }>;
-  }>;
-  pitfalls: Array<{
-    code: string;
-    label: string;
-    category: string | null;
-    problemCount: number;
-    examCount: number;
-  }>;
-  unitSegmentation: {
-    common: AggregateResponse['unitFrequency'];
-    unique: AggregateResponse['unitFrequency'];
-  };
-  unitTrends: Array<{
-    level1Code: string;
-    level1Name: string;
-    byYear: Record<string, { problemCount: number; schoolCount: number; examCount: number }>;
-  }>;
+  filters: { year: number | null; grade: string | null; semester: 1 | 2 | null; examType: string | null; schools: string[] | null; examIds?: string[] | null };
+  matched: { schoolCount: number; examCount: number; analyzedExamCount: number; problemCount: number; classifiedProblemCount: number };
+  unitFrequency: UnitRow[];
+  difficultyDist: { examBandCounts: Array<{ band: string; hue: string; examCount: number }>; overallAvg: number | null; overallStdDev: number | null; examWithAvgCount: number };
+  schoolBreakdown: Array<{ school: string; examCount: number; problemCount: number; avgDifficulty: number | null; stdDevDifficulty: number | null; topUnits: Array<{ level1Name: string; problemCount: number }>; unitCounts?: Array<{ level1Name: string; problemCount: number }> }>;
+  exams: ExamRow[];
+  pitfalls: Array<{ code: string; label: string; category: string | null; problemCount: number; examCount: number }>;
+  unitSegmentation: { common: UnitRow[]; unique: UnitRow[] };
+  unitTrends: Array<{ level1Code: string; level1Name: string; byYear: Record<string, { problemCount: number; schoolCount: number; examCount: number }> }>;
   availableYears: number[];
-  aiNarratives: Array<{
-    examId: string;
-    examTitle: string;
-    school: string;
-    year: number | null;
-    summary: string | null;
-    hardQuestions: Array<{
-      problemId: string;
-      number: number;
-      subTitle: string;
-      intent: string;
-    }>;
-    generatedAt: string | null;
-  }>;
+  aiNarratives: Array<{ examId: string; examTitle: string; school: string; year: number | null; summary: string | null; hardQuestions: Array<{ problemId: string; number: number; subTitle: string; intent: string }>; generatedAt: string | null }>;
   narrative: Array<{ heading: string; paragraphs: string[] }>;
-  /** 학원 표기·디자인 (report-brand.ts) — 없으면 과사람 기본 */
-  brand?: {
-    key: string;
-    name: string;
-    eyebrow: string;
-    footer?: string;
-    showChip: boolean;
-    og: { bgFrom: string; bgTo: string; badgeFrom: string; badgeTo: string; badgeText: string; accent: string; label: string };
-  };
+  brand?: { key: string; name: string; eyebrow: string; footer?: string; showChip: boolean; og: { bgFrom: string; bgTo: string; badgeFrom: string; badgeTo: string; badgeText: string; accent: string; label: string } };
 }
 
-/** 시험지 한 장의 짧은 라벨 — "2024년 1학기 중간" (메타 없으면 제목) */
-function examLabel(e: { title: string; year: number | null; semester: 1 | 2 | null; examType: string | null }): string {
-  const parts = [e.year ? `${e.year}년` : null, e.semester ? `${e.semester}학기` : null, e.examType].filter(Boolean);
-  return parts.length ? parts.join(' ') : e.title;
-}
-
-// 5밴드 색상 (크림 톤 기준 매핑)
-const BAND_COLOR: Record<string, { bg: string; text: string; bar: string; soft: string }> = {
-  '평이': { bg: 'bg-yellow-50', text: 'text-yellow-700', bar: 'bg-yellow-400', soft: '#FEF3C7' },
-  '보통': { bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-400', soft: '#D1FAE5' },
-  '난이도 있음': { bg: 'bg-orange-50', text: 'text-orange-700', bar: 'bg-orange-400', soft: '#FFEBD7' },
-  '매우 난이도 있음': { bg: 'bg-rose-50', text: 'text-rose-700', bar: 'bg-rose-400', soft: '#FFE4E6' },
-  '최고난도': { bg: 'bg-rose-100', text: 'text-rose-800', bar: 'bg-rose-600', soft: '#FECACA' },
-};
-
+// ─── 공통 유틸 ───────────────────────────────────────────────────────────
 function bandFor(avg: number | null | undefined): string {
   if (avg == null) return '';
   if (avg <= 2) return '평이';
@@ -145,17 +51,44 @@ function bandFor(avg: number | null | undefined): string {
   if (avg <= 8) return '매우 난이도 있음';
   return '최고난도';
 }
+/** 난이도 → 색 (report.css 난이도 팔레트와 같은 4단) */
+function diffColor(avg: number | null | undefined): string {
+  if (avg == null) return 'var(--rp-text-4)';
+  if (avg <= 2) return 'var(--rp-diff-low)';
+  if (avg <= 4) return 'var(--rp-diff-mid)';
+  if (avg <= 6) return 'var(--rp-diff-high)';
+  return 'var(--rp-diff-extra)';
+}
+function examLabel(e: { title: string; year: number | null; semester: 1 | 2 | null; examType: string | null }, withYear = true): string {
+  const parts = [withYear && e.year ? `${e.year}년` : null, e.semester ? `${e.semester}학기` : null, e.examType].filter(Boolean);
+  return parts.length ? parts.join(' ') : e.title;
+}
+function fmt2(n: number | null | undefined): string { return n == null ? '-' : n.toFixed(2); }
+/** 받침 유무로 조사 선택 — 마지막 글자가 한글이 아니면 받침 없는 쪽 */
+function josa(word: string, withBatchim: string, without: string): string {
+  const ch = word.charCodeAt(word.length - 1);
+  if (ch < 0xac00 || ch > 0xd7a3) return without;
+  return (ch - 0xac00) % 28 === 0 ? without : withBatchim;
+}
+/** AI 문장 속 $…$ 수식 기호를 걷어 학부모가 읽을 수 있는 평문으로 */
+function plain(s: string): string {
+  return s.replace(/\$([^$]*)\$/g, (_, inner: string) => inner.replace(/\\[a-zA-Z]+\s?/g, '').replace(/[{}]/g, '')).replace(/\s{2,}/g, ' ').trim();
+}
+function signed(n: number): string { return `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(2)}`; }
+function Delta({ d, threshold = 0.05 }: { d: number | null; threshold?: number }) {
+  if (d == null) return null;
+  if (Math.abs(d) < threshold) return <span className="ag-delta flat">≈ 비슷</span>;
+  return <span className={`ag-delta ${d > 0 ? 'up' : 'down'}`}>{d > 0 ? '▲' : '▼'} {Math.abs(d).toFixed(2)}</span>;
+}
+function Band({ avg }: { avg: number | null | undefined }) {
+  const b = bandFor(avg);
+  return b ? <span className="ag-band" data-band={b}>{b}</span> : null;
+}
 
-// ─── 메인 ────────────────────────────────────────────────────────────────
+// ─── 진입 ────────────────────────────────────────────────────────────────
 export default function ShareAggregateClient() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#FAF8F5]">
-          <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="report-shell flex min-h-screen items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" style={{ color: 'var(--rp-accent)' }} /></div>}>
       <ShareAggregateContent />
     </Suspense>
   );
@@ -163,6 +96,8 @@ export default function ShareAggregateClient() {
 
 function ShareAggregateContent() {
   const sp = useSearchParams();
+  // ★ 문자열로 고정 — 객체 동일성에 의존하면 렌더마다 fetch 가 다시 돌 수 있다
+  const query = sp.toString();
   const [data, setData] = useState<AggregateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -172,13 +107,8 @@ function ShareAggregateContent() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`/api/reports/aggregate?${sp.toString()}`, {
-          cache: 'no-store',
-        });
-        if (!r.ok) {
-          if (!cancelled) setErr(`HTTP ${r.status}`);
-          return;
-        }
+        const r = await fetch(`/api/reports/aggregate?${query}`, { cache: 'no-store' });
+        if (!r.ok) { if (!cancelled) setErr(`HTTP ${r.status}`); return; }
         const d = (await r.json()) as AggregateResponse;
         if (!cancelled) setData(d);
       } catch (e) {
@@ -187,10 +117,8 @@ function ShareAggregateContent() {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sp]);
+    return () => { cancelled = true; };
+  }, [query]);
 
   const handleCopyLink = async () => {
     try {
@@ -203,1259 +131,514 @@ function ShareAggregateContent() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#FAF8F5]">
-        <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-      </div>
-    );
+    return <div className="report-shell flex min-h-screen items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" style={{ color: 'var(--rp-accent)' }} /></div>;
   }
   if (err || !data) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#FAF8F5] text-zinc-700">
-        <AlertTriangle className="h-10 w-10 text-orange-300" />
-        <div className="text-sm">{err || '데이터를 불러올 수 없습니다.'}</div>
+      <div className="report-shell flex min-h-screen flex-col items-center justify-center gap-3">
+        <AlertTriangle className="h-10 w-10" style={{ color: 'var(--rp-accent)' }} />
+        <div className="text-sm" style={{ color: 'var(--rp-text-2)' }}>
+          {err === 'HTTP 401' ? '이 링크는 열 수 없습니다. 리포트를 보낸 분께 새 링크를 요청해 주세요.' : err || '데이터를 불러올 수 없습니다.'}
+        </div>
       </div>
     );
   }
 
   const m = data.matched;
-  // ★ 학교 1곳 리포트(학교 상세에서 시험지를 골라 만든 링크) — 학교 비교 대신 연도별 비교로 보여 준다 (2026-11-07 학부모 설명회)
   const single = m.schoolCount === 1;
-  const singleSchool = single ? data.exams[0]?.school ?? '' : '';
-  const yearsSorted = Array.from(new Set(data.exams.map((e) => e.year).filter((y): y is number => y != null))).sort((a, b) => a - b);
-  const yearRange = yearsSorted.length === 0 ? '' : yearsSorted.length === 1 ? `${yearsSorted[0]}년` : `${yearsSorted[0]}~${yearsSorted[yearsSorted.length - 1]}년`;
   const brand = data.brand;
-  const accent = brand?.og.accent ?? '#ea580c';
   const brandLabel = brand?.showChip ? brand.name : 'Math×Sci Bank';
-  // 섹션 번호 — 숨는 섹션이 있어도 이어지게 렌더마다 센다
-  let secNo = 0;
-  const sec = () => String(++secNo).padStart(2, '0');
+  const schoolName = single ? data.exams[0]?.school ?? '' : '';
+  const years = Array.from(new Set(data.exams.map((e) => e.year).filter((y): y is number => y != null))).sort((a, b) => a - b);
+  const yearRange = years.length === 0 ? '' : years.length === 1 ? `${years[0]}년` : `${years[0]}~${years[years.length - 1]}년`;
+  const semesters = Array.from(new Set(data.exams.map((e) => e.semester).filter(Boolean)));
+  const types = Array.from(new Set(data.exams.map((e) => e.examType).filter(Boolean)));
+  const kindLabel = [semesters.length === 1 ? `${semesters[0]}학기` : null, types.length === 1 ? (types[0] === '중간' || types[0] === '기말' ? `${types[0]}고사` : types[0]) : null].filter(Boolean).join(' ');
   const filterChips = [
     data.filters.year ? `${data.filters.year}년` : null,
     data.filters.grade,
     data.filters.semester ? `${data.filters.semester}학기` : null,
     data.filters.examType,
-    // chip 은 실제 매칭된 학교 수를 표시 — 사용자 필터(filters.schools)에는 데이터 없는 학교가 섞여
-    // 우측 'MATCHED' 와 불일치하던 사고 차단 (사용자 7곳 선택했는데 chip 만 10곳으로 표시되는 등).
-    data.filters.schools && data.filters.schools.length > 0
-      ? `학교 ${m.schoolCount}곳`
-      : null,
-    // 학교 상세에서 시험지를 직접 골라 만든 집계 (examIds)
-    (data.filters as { examIds?: string[] | null }).examIds?.length
-      ? `선택 시험지 ${m.examCount}건`
-      : null,
+    data.filters.schools && data.filters.schools.length > 0 ? `학교 ${m.schoolCount}곳` : null,
   ].filter(Boolean) as string[];
+  const narrative = data.narrative.filter((n) => !/깊이까지/.test(n.heading));
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] px-4 pb-20 pt-8 text-zinc-800 print:bg-white print:px-0 print:py-0">
-      {/* 액션바 (인쇄·공유) */}
-      <div className="sticky top-3 z-10 mx-auto mb-6 max-w-5xl print:hidden">
-        <div className="flex flex-wrap gap-1.5 rounded-xl border border-orange-200/60 bg-white/90 p-1.5 shadow-sm backdrop-blur">
-          <button
-            onClick={handleCopyLink}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-orange-50 hover:text-orange-700"
-          >
+    <div className="report-shell ag-shell" data-brand={brand?.key ?? 'cream-orange'}>
+      {/* 액션 바 */}
+      <div className="ag-actions print:hidden">
+        <div className="ag-actions-inner">
+          <button type="button" className="ag-action" onClick={handleCopyLink}>
             {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
             {linkCopied ? '링크 복사됨' : '링크 복사'}
           </button>
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-orange-50 hover:text-orange-700"
-          >
+          <button type="button" className="ag-action" onClick={() => window.print()}>
             <Printer className="h-3.5 w-3.5" />
             인쇄
           </button>
-          <div className="ml-auto flex items-center pr-2 text-[10px] text-zinc-500">
-            {brandLabel} — 학교 기출 분석
-          </div>
+          <div className="ag-actions-brand">{brandLabel} — 학교 기출 분석</div>
         </div>
       </div>
 
-      {/* 본문 — A4 비율 카드 */}
-      <article className="mx-auto max-w-5xl rounded-2xl border border-orange-100 bg-white p-8 shadow-md sm:p-10 print:border-0 print:shadow-none">
-        {/* HEADER */}
-        <header className="mb-8 flex flex-wrap items-end justify-between gap-3 border-b-2 pb-5" style={{ borderColor: `${accent}55` }}>
+      <article className="ag-paper">
+        {/* 헤더 */}
+        <header className="ag-head">
           <div>
-            <div className="flex items-center gap-2">
-              <div className="text-[11px] font-bold tracking-[0.12em]" style={{ color: accent }}>
-                {brand?.showChip ? brand.eyebrow : '학교 기출 분석 리포트'}
-              </div>
+            <div className="ag-eyebrow-row">
+              <span className="ag-eyebrow">{brand?.showChip ? brand.eyebrow : '학교 기출 분석 리포트'}</span>
               {brand?.showChip && (
-                <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                  style={{ background: brand.og.badgeFrom, color: brand.og.badgeText }}
-                >
-                  {brand.name}
-                </span>
+                <span className="ag-brandchip" style={{ background: brand.og.badgeFrom, color: brand.og.badgeText }}>{brand.name}</span>
               )}
             </div>
-            <h1 className="mt-1.5 text-2xl font-bold text-zinc-900 sm:text-3xl">
-              {single ? (
-                <>
-                  <span style={{ color: accent }}>{singleSchool}</span> 기출 분석
-                </>
-              ) : (
-                <>
-                  <span style={{ color: accent }}>학교별 시험지</span> 집계 분석
-                </>
-              )}
+            <h1 className="ag-title">
+              {single ? <><span className="accent">{schoolName}</span> 기출 분석</> : <><span className="accent">학교별 시험지</span> 집계 분석</>}
             </h1>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {filterChips.length > 0 ? (
-                filterChips.map((c, i) => (
-                  <span
-                    key={i}
-                    className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-orange-700"
-                  >
-                    {c}
-                  </span>
-                ))
+            <div className="ag-sub">
+              {single ? (
+                <>{kindLabel ? <><b>{kindLabel}</b> · </> : null}{yearRange ? <><b>{yearRange}</b> · </> : null}시험지 {m.examCount}장 · 문항 {m.problemCount}개</>
               ) : (
-                <span className="text-xs text-zinc-500">전체 기준</span>
+                <>{filterChips.length ? <><b>{filterChips.join(' · ')}</b> · </> : null}학교 {m.schoolCount}곳 · 시험지 {m.examCount}장 · 문항 {m.problemCount}개</>
               )}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-[10px] font-bold tracking-[0.15em] text-zinc-500">
-              분석 시험지
-            </div>
-            <div className="text-3xl font-bold tabular-nums text-zinc-900">{m.examCount}<span className="ml-0.5 text-base font-semibold text-zinc-500">장</span></div>
-            <div className="text-[11px] text-zinc-500">
-              {single ? (yearRange ? `${yearRange} · ` : '') : `학교 ${m.schoolCount}곳 · `}문항 {m.problemCount}개
-            </div>
+          <div className="ag-head-right">
+            <div className="k">평균 난이도</div>
+            <div className="v">{data.difficultyDist.overallAvg != null ? data.difficultyDist.overallAvg.toFixed(1) : '-'}<small>/ 10</small></div>
+            <div className="s"><Band avg={data.difficultyDist.overallAvg} /></div>
           </div>
         </header>
 
-        {/* CTA 배너 — 시험지별 상세 분석 진입 강조 */}
-        {(() => {
-          const detailCount = data.exams.filter((e) => e.hasAnalysis && e.shareToken).length;
-          if (detailCount === 0) return null;
-          return (
-            <div className="mt-6 mb-2 rounded-xl border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50 p-5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-orange-900">
-                    이 리포트는 큰 흐름입니다 — 시험지 한 장씩 더 깊이 보실 수 있습니다
-                  </h3>
-                  <p className="mt-1.5 text-[15px] leading-relaxed text-zinc-700">
-                    시험지 <strong className="text-orange-700">{detailCount}장</strong>은 문항 하나하나까지 분석돼 있습니다.
-                    「상세 보기」를 누르면 <strong>실제 문제 · 풀이 단계 · 출제 의도</strong>까지 확인하실 수 있습니다.
-                  </p>
-                  <p className="mt-2 text-[13.5px] text-zinc-600">
-                    아래 <strong>시험지별 분석</strong>과 <strong>시험지 목록</strong>의 ‘상세 보기’에서 들어가실 수 있습니다.
-                  </p>
-                </div>
-              </div>
+        {/* 히어로 */}
+        {single ? <HeroSingle data={data} school={schoolName} /> : <HeroMulti data={data} />}
+
+        {/* 본문 */}
+        {single ? <ExamYearCards data={data} /> : <SchoolCards data={data} />}
+
+        <UnitHeat data={data} single={single} />
+
+        {!single && <DifficultyBands data={data} />}
+
+        {narrative.length > 0 && (
+          <section className="ag-section">
+            <div className="ag-section-head">
+              <h2 className="ag-section-title"><Lightbulb className="h-4 w-4" />강사 인사이트</h2>
+              <span className="ag-section-desc">숫자를 수업 경험으로 풀어 쓴 해석입니다</span>
             </div>
-          );
-        })()}
-
-        {/* 기본 통계 4 카드 */}
-        <Section number={sec()} title="기본 정보" accent={accent}>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {single ? (
-              <Stat label="기간" value={yearRange || '-'} />
-            ) : (
-              <Stat label="학교" value={`${m.schoolCount}곳`} />
-            )}
-            <Stat label="시험지" value={`${m.examCount}장`} />
-            <Stat label="문항" value={`${m.problemCount}개`} />
-            <Stat
-              label="평균 난이도"
-              value={data.difficultyDist.overallAvg != null ? data.difficultyDist.overallAvg.toFixed(1) : '-'}
-              hint={bandFor(data.difficultyDist.overallAvg) || undefined}
-            />
-          </div>
-        </Section>
-
-        {/* ★ HERO — 학교 여러 곳이면 학교별 비교, 한 곳이면 연도별 비교 */}
-        {single ? (
-          <Section number={sec()} title="연도별 비교" icon={<TrendingUp className="h-4 w-4" />} accent={accent}>
-            <YearComparison data={data} />
-          </Section>
-        ) : (
-          <Section number={sec()} title="학교별 비교" icon={<TrendingUp className="h-4 w-4" />} accent={accent}>
-            <SchoolComparison data={data} />
-          </Section>
-        )}
-
-        {/* 강사 인사이트 — narrative */}
-        {data.narrative.length > 0 && (
-          <Section number={sec()} title="강사 인사이트" icon={<Lightbulb className="h-4 w-4" />} accent={accent}>
-            <div className="space-y-6 rounded-xl border border-orange-100 bg-orange-50/40 p-6 text-[15.5px] leading-[1.8] text-zinc-700">
-              {data.narrative.map((sec, i) => (
+            <div className="ag-narr">
+              {narrative.map((sec, i) => (
                 <div key={i}>
-                  <h4 className="mb-2 text-[15px] font-bold text-orange-700">{sec.heading}</h4>
-                  {sec.paragraphs.map((p, j) => (
-                    <p key={j} className="mb-2 text-zinc-700 last:mb-0">
-                      {p}
-                    </p>
-                  ))}
+                  <h4>{sec.heading}</h4>
+                  {sec.paragraphs.map((p, j) => <p key={j}>{p}</p>)}
                 </div>
               ))}
             </div>
-            <div className="mt-2 text-[11px] text-zinc-500">
-              ※ 모든 수치는 실제 시험지 문항 데이터에서 직접 계산했습니다.
-            </div>
-          </Section>
+            <div className="ag-note">※ 모든 수치는 실제 시험지 문항 데이터에서 직접 계산했습니다.</div>
+          </section>
         )}
 
-        {/* 난이도 분포 */}
-        <Section number={sec()} title="시험지 전체 난이도" icon={<BarChart3 className="h-4 w-4" />} accent={accent}>
-          <DifficultyView data={data} />
-        </Section>
+        {data.pitfalls.length > 0 && <Pitfalls data={data} />}
 
-        {/* 단원 빈도 + 시계열 */}
-        <Section number={sec()} title="단원 출제 빈도" icon={<PieChart className="h-4 w-4" />} accent={accent}>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <UnitListView data={data} />
-            <UnitTrendsView data={data} />
-          </div>
-        </Section>
+        {!single && <ExamTable data={data} />}
 
-        {/* 공통 vs 차별 단원 — 학교 3곳 이상일 때만 의미가 있다 (1곳이면 "공통 단원 없음" 같은 오해를 준다) */}
-        {m.schoolCount >= 3 && (
-        <Section number={sec()} title="공통 단원 vs 학교별 차별 단원" icon={<Users className="h-4 w-4" />} accent={accent}>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <UnitSegmentView
-              title={`공통 출제 (≥80% 학교)`}
-              units={data.unitSegmentation.common}
-              totalSchools={m.schoolCount}
-              accent="cyan"
-              empty="공통 단원 없음"
-            />
-            <UnitSegmentView
-              title={`학교 차별 (≤30% 학교)`}
-              units={data.unitSegmentation.unique}
-              totalSchools={m.schoolCount}
-              accent="amber"
-              empty="모든 단원이 고르게 출제됨"
-            />
-          </div>
-        </Section>
-        )}
-
-        {/* 함정(있을 때만) + 시험지별 분석 */}
-        {(data.pitfalls.length > 0 || data.aiNarratives.length > 0) && (
-          <Section
-            number={sec()}
-            title={
-              data.pitfalls.length > 0
-                ? '자주 걸리는 함정 · 시험지별 분석'
-                : '시험지별 분석'
-            }
-            icon={<ScrollText className="h-4 w-4" />}
-            accent={accent}
-          >
-            <div
-              className={`grid grid-cols-1 gap-5 ${
-                data.pitfalls.length > 0 ? 'lg:grid-cols-2' : ''
-              }`}
-            >
-              {data.pitfalls.length > 0 && <PitfallView data={data} />}
-              <AiNarrativeView data={data} />
-            </div>
-          </Section>
-        )}
-
-        {/* 매칭 시험지 목록 */}
-        <Section number={sec()} title={`시험지 목록 (${m.examCount}장)`} accent={accent}>
-          <ExamTable data={data} />
-        </Section>
-
-        {/* 푸터 */}
-        <footer className="mt-10 border-t border-orange-100 pt-4 text-center text-[10px] text-zinc-500">
-          {brand?.footer ? (
-            <>
-              <span className="font-semibold text-zinc-700">{brand.name}</span>
-              <span className="ml-2">{brand.footer}</span>
-            </>
-          ) : (
-            <>{brandLabel} · 학교 기출 분석 리포트</>
-          )}
+        <footer className="ag-foot">
+          {brand?.footer ? <><b>{brand.name}</b> · {brand.footer}</> : <>{brandLabel} · 학교 기출 분석 리포트</>}
         </footer>
       </article>
     </div>
   );
 }
 
-// ─── 공통 컴포넌트 ───────────────────────────────────────────────────────
-function Section({
-  number,
-  title,
-  icon,
-  accent,
-  children,
-}: {
-  number: string;
-  title: string;
-  icon?: React.ReactNode;
-  /** 학원 디자인 포인트 색 (report-brand og.accent) */
-  accent?: string;
-  children: React.ReactNode;
-}) {
-  const color = accent ?? '#ea580c';
+// ─── 히어로 (학교 1곳) — 한 문장 + 연도별 난이도 궤적 ────────────────────────
+function HeroSingle({ data, school }: { data: AggregateResponse; school: string }) {
+  const rows = [...data.exams]
+    .filter((e) => e.avgDifficulty != null)
+    .sort((a, b) => (a.year ?? 0) - (b.year ?? 0) || (a.semester ?? 0) - (b.semester ?? 0) || a.title.localeCompare(b.title));
+  const groupAvg = data.difficultyDist.overallAvg;
+  const first = rows[0]; const last = rows[rows.length - 1];
+  const span = rows.length >= 2 && first.avgDifficulty != null && last.avgDifficulty != null ? last.avgDifficulty - first.avgDifficulty : null;
+  const everyTime = data.unitFrequency.filter((u) => data.exams.length >= 2 && u.examCount === data.exams.length);
+  const topUnits = (everyTime.length ? everyTime : data.unitFrequency).slice(0, 2).map((u) => u.level1Name);
+  const hardest = rows.length ? [...rows].sort((a, b) => (b.avgDifficulty || 0) - (a.avgDifficulty || 0))[0] : null;
+
+  // 한 문장 — 데이터로 만든 이 리포트의 주장
+  const thesis = (() => {
+    if (!rows.length) return <>{school} 시험지 {data.exams.length}장을 모았습니다.</>;
+    const trend = span == null ? '' : Math.abs(span) < 0.3 ? '비슷한 수준을 유지했고' : span > 0 ? '점점 어려워졌고' : '점점 평이해졌고';
+    const kind = kindOf(rows);
+    return (
+      <>
+        {school} {kind}{josa(kind, '은', '는')}{' '}
+        {rows.length >= 2 && first.year && last.year
+          ? <>{first.year}년 <span className="accent">{fmt2(first.avgDifficulty)}</span> → {last.year}년 <span className="accent">{fmt2(last.avgDifficulty)}</span>, {trend} </>
+          : <>평균 <span className="accent">{fmt2(groupAvg)}</span>이고, </>}
+        {topUnits.length ? <>해마다 <span className="accent">{topUnits.join('·')}</span>{josa(topUnits[topUnits.length - 1], '이', '가')} 빠지지 않습니다.</> : <>단원 분포는 아래 표에 있습니다.</>}
+      </>
+    );
+  })();
+
   return (
-    <section className="mt-9 first:mt-0">
-      <div className="mb-4 flex items-center gap-2.5 border-l-4 pl-3" style={{ borderColor: color }}>
-        <span className="font-mono text-sm" style={{ color }}>{number}</span>
-        {icon && <span style={{ color }}>{icon}</span>}
-        <h2 className="text-lg font-bold text-zinc-900">{title}</h2>
+    <section className="ag-hero">
+      <div>
+        <p className="ag-thesis">{thesis}</p>
+        <div className="ag-kpis">
+          <div className="ag-kpi"><div className="n">{groupAvg != null ? groupAvg.toFixed(2) : '-'}</div><div className="l">{rows.length}장 평균 난이도</div></div>
+          {span != null && <div className="ag-kpi"><div className="n" style={{ color: span > 0.3 ? '#B4332B' : span < -0.3 ? '#1F6B36' : undefined }}>{signed(span)}</div><div className="l">{first.year}→{last.year} 변화</div></div>}
+          {hardest && <div className="ag-kpi"><div className="n">{hardest.year ?? '-'}<small>년</small></div><div className="l">가장 어려웠던 해 · {fmt2(hardest.avgDifficulty)}</div></div>}
+          <div className="ag-kpi"><div className="n">{everyTime.length}<small>개</small></div><div className="l">매 시험 나온 단원</div></div>
+        </div>
       </div>
-      {children}
+      <Trajectory rows={rows} groupAvg={groupAvg} />
     </section>
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-orange-100 bg-orange-50/30 p-3.5">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-orange-600">{label}</div>
-      <div className="mt-1.5 text-2xl font-bold tabular-nums text-zinc-900">
-        {value}
-        {hint && <span className="ml-1.5 text-[12px] font-medium text-zinc-500">({hint})</span>}
-      </div>
-    </div>
-  );
+function kindOf(rows: ExamRow[]): string {
+  const sems = new Set(rows.map((r) => r.semester).filter(Boolean));
+  const types = new Set(rows.map((r) => r.examType).filter(Boolean));
+  const s = sems.size === 1 ? `${Array.from(sems)[0]}학기 ` : '';
+  const t = types.size === 1 ? (() => { const v = Array.from(types)[0] as string; return v === '중간' || v === '기말' ? `${v}고사` : v; })() : '시험';
+  return `${s}${t}`;
 }
 
-function DifficultyView({ data }: { data: AggregateResponse }) {
-  const dd = data.difficultyDist;
-  const total = dd.examWithAvgCount;
-  const overall = dd.overallAvg;
-  const overallBand = bandFor(overall);
-  const cls = overallBand ? BAND_COLOR[overallBand] : null;
-
+/** 연도별 난이도 궤적 — 이 리포트의 서명. 점 = 시험지, 색 = 난이도 밴드, 점선 = 전체 평균 */
+function Trajectory({ rows, groupAvg }: { rows: ExamRow[]; groupAvg: number | null }) {
+  const W = 520, H = 230, PL = 40, PR = 18, PT = 26, PB = 40;
+  const n = rows.length;
+  if (n === 0) return <div className="ag-empty">난이도를 계산할 수 있는 시험지가 없습니다</div>;
+  const vals = rows.map((r) => r.avgDifficulty || 0);
+  const lo = Math.max(1, Math.floor(Math.min(...vals, groupAvg ?? 10) - 1));
+  const hi = Math.min(10, Math.ceil(Math.max(...vals, groupAvg ?? 1) + 1));
+  const x = (i: number) => (n === 1 ? (PL + (W - PL - PR) / 2) : PL + (i * (W - PL - PR)) / (n - 1));
+  const y = (v: number) => PT + ((hi - v) / (hi - lo)) * (H - PT - PB);
+  const path = rows.map((r, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(r.avgDifficulty || 0).toFixed(1)}`).join(' ');
+  const ticks: number[] = [];
+  for (let v = lo; v <= hi; v++) ticks.push(v);
   return (
-    <div>
-      <div className="mb-4 rounded-xl border border-orange-100 bg-orange-50/30 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <span className="text-3xl font-bold tabular-nums text-zinc-900">
-              {overall != null ? overall.toFixed(2) : '-'}
-            </span>
-            <span className="ml-1.5 text-xs text-zinc-500">/ 10 — 시험지 평균의 평균</span>
-            {cls && (
-              <span
-                className={`ml-2 rounded-full px-2 py-0.5 text-xs font-bold ${cls.bg} ${cls.text}`}
-              >
-                {overallBand}
-              </span>
-            )}
-          </div>
-          {dd.overallStdDev != null && (
-            <span className="text-xs text-zinc-500">시험지 간 편차 ±{dd.overallStdDev.toFixed(2)}</span>
-          )}
-        </div>
-        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-zinc-200">
-          {overall != null && (
-            <div
-              className="h-full bg-gradient-to-r from-yellow-400 via-orange-400 to-rose-500"
-              style={{ width: `${(overall / 10) * 100}%` }}
-            />
-          )}
-        </div>
-        <div className="mt-1 flex justify-between text-[10px] font-medium text-zinc-500">
-          <span>1 평이</span>
-          <span>5 난이도 있음</span>
-          <span>10 최고난도</span>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {dd.examBandCounts.map((bc) => {
-          const cls2 = BAND_COLOR[bc.band];
-          if (!cls2) return null;
-          const pct = total > 0 ? (bc.examCount / total) * 100 : 0;
-          return (
-            <div key={bc.band} className="flex items-center gap-3 text-sm">
-              <div className={`w-24 text-right font-bold ${cls2.text}`}>{bc.band}</div>
-              <div className="flex-1 overflow-hidden rounded-full bg-zinc-100">
-                <div className={`h-2.5 ${cls2.bar}`} style={{ width: `${pct}%` }} />
-              </div>
-              <div className="w-16 text-right tabular-nums font-semibold text-zinc-700">
-                {bc.examCount}건
-              </div>
-              <div className="w-14 text-right tabular-nums text-zinc-500">{pct.toFixed(0)}%</div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 rounded-md bg-zinc-50 p-3 text-[12.5px] leading-relaxed text-zinc-600">
-        <strong className="text-orange-700">학부모 가이드</strong> — 1~2 평이 (교과서 기본) / 3~4 보통 / 5~6 난이도 있음 (내신 평균) / 7~8 매우 난이도 있음 (상위권 변별) / 9~10 최고난도
-      </div>
-    </div>
-  );
-}
-
-function UnitListView({ data }: { data: AggregateResponse }) {
-  const top = data.unitFrequency.slice(0, 12);
-  const max = Math.max(1, ...top.map((u) => u.problemCount));
-  return (
-    <div>
-      <div className="mb-2.5 text-sm font-semibold text-zinc-700">단원 출제 빈도 (TOP 12)</div>
-      <div className="space-y-2">
-        {top.map((u) => {
-          const pct = (u.problemCount / max) * 100;
-          return (
-            <div key={u.level1Code} className="flex items-center gap-2.5 text-[13.5px]">
-              <div className="w-36 truncate font-medium text-zinc-700" title={u.level1Name}>
-                {u.level1Name}
-              </div>
-              <div className="flex-1 overflow-hidden rounded-full bg-zinc-100">
-                <div
-                  className="h-2.5 rounded-full bg-gradient-to-r from-orange-400 to-orange-600"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <div className="w-10 text-right tabular-nums font-semibold text-zinc-700">
-                {u.problemCount}
-              </div>
-              <div className="w-16 text-right text-[11.5px] text-zinc-500">
-                {u.schoolCount}/{data.matched.schoolCount}곳
-              </div>
-            </div>
-          );
-        })}
-        {top.length === 0 && (
-          <div className="py-4 text-center text-sm text-zinc-500">분류된 문항 없음</div>
+    <div className="ag-chart">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="연도별 평균 난이도 궤적">
+        {ticks.map((v) => (
+          <g key={v}>
+            <line x1={PL} x2={W - PR} y1={y(v)} y2={y(v)} stroke="var(--rp-line-soft)" strokeWidth={1} />
+            <text x={PL - 8} y={y(v) + 4} fontSize={10.5} textAnchor="end" fill="var(--rp-text-4)">{v}</text>
+          </g>
+        ))}
+        {groupAvg != null && (
+          <g>
+            <line x1={PL} x2={W - PR} y1={y(groupAvg)} y2={y(groupAvg)} stroke="var(--rp-text-3)" strokeWidth={1.2} strokeDasharray="4 4" />
+            <text x={W - PR} y={y(groupAvg) - 6} fontSize={10.5} textAnchor="end" fill="var(--rp-text-3)">평균 {groupAvg.toFixed(2)}</text>
+          </g>
         )}
-      </div>
-    </div>
-  );
-}
-
-function UnitTrendsView({ data }: { data: AggregateResponse }) {
-  const years = data.availableYears;
-  if (years.length < 2) {
-    return (
-      <div>
-        <div className="mb-2 text-xs font-semibold text-zinc-700">단원 시계열 추세</div>
-        <div className="rounded-lg border border-orange-100 bg-orange-50/20 py-6 text-center text-xs text-zinc-500">
-          비교할 년도 데이터가 1개 이하 — 추세 미생성
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div>
-      <div className="mb-2 text-xs font-semibold text-zinc-700">
-        단원 시계열 추세 ({years[0]}~{years[years.length - 1]}, TOP 5)
-      </div>
-      <div className="space-y-2">
-        {data.unitTrends.map((t) => {
-          const cells = years.map(
-            (y) => t.byYear[String(y)] || { problemCount: 0, schoolCount: 0, examCount: 0 }
-          );
-          const maxC = Math.max(1, ...cells.map((c) => c.problemCount));
-          const last = cells[cells.length - 1].problemCount;
-          const prev = cells[cells.length - 2].problemCount;
-          const trendPct =
-            prev > 0
-              ? Math.round(((last - prev) / prev) * 100)
-              : last > 0
-                ? null
-                : 0;
+        {n >= 2 && <path d={path} fill="none" stroke="var(--rp-accent)" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />}
+        {rows.map((r, i) => {
+          const cx = x(i), cy = y(r.avgDifficulty || 0);
           return (
-            <div key={t.level1Code} className="rounded-lg border border-orange-100 bg-orange-50/20 p-2.5">
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <div className="text-xs font-semibold text-zinc-800">{t.level1Name}</div>
-                <div className="text-[10px] tabular-nums">
-                  {trendPct === null ? (
-                    <span className="font-bold text-emerald-600">신규</span>
-                  ) : Math.abs(trendPct) >= 5 ? (
-                    <span
-                      className={`font-bold ${trendPct > 0 ? 'text-emerald-600' : 'text-rose-600'}`}
-                    >
-                      {trendPct > 0 ? '+' : ''}
-                      {trendPct}%
-                    </span>
-                  ) : (
-                    <span className="text-zinc-500">≈</span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-end gap-1.5" style={{ height: 40 }}>
-                {cells.map((c, i) => {
-                  const h = (c.problemCount / maxC) * 100;
-                  return (
-                    <div key={years[i]} className="flex flex-1 flex-col items-center gap-0.5">
-                      <div
-                        className="w-full rounded-sm bg-gradient-to-t from-orange-500 to-orange-300"
-                        style={{
-                          height: `${h}%`,
-                          minHeight: c.problemCount > 0 ? 2 : 0,
-                        }}
-                        title={`${years[i]}: ${c.problemCount}문 / ${c.schoolCount}학교`}
-                      />
-                      <div className="text-[9px] tabular-nums text-zinc-500">{years[i]}</div>
-                      <div className="text-[10px] tabular-nums font-semibold text-zinc-700">
-                        {c.problemCount}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <g key={r.id}>
+              <circle cx={cx} cy={cy} r={7} fill={diffColor(r.avgDifficulty)} stroke="var(--rp-paper)" strokeWidth={2.5} />
+              <text x={cx} y={cy - 14} fontSize={12.5} fontWeight={700} textAnchor="middle" fill="var(--rp-text)">{fmt2(r.avgDifficulty)}</text>
+              <text x={cx} y={H - PB + 18} fontSize={11.5} fontWeight={600} textAnchor="middle" fill="var(--rp-text-2)">{r.year ?? ''}</text>
+              <text x={cx} y={H - PB + 32} fontSize={10} textAnchor="middle" fill="var(--rp-text-4)">{examLabel(r, false)}</text>
+            </g>
           );
         })}
+      </svg>
+      <div className="ag-chart-caption">
+        <span>세로축 1(평이) ~ 10(최고난도)</span>
+        <span>점 색 = 난이도 단계 · 점선 = {n}장 평균</span>
       </div>
     </div>
   );
 }
 
-function UnitSegmentView({
-  title,
-  units,
-  totalSchools,
-  accent,
-  empty,
-}: {
-  title: string;
-  units: AggregateResponse['unitFrequency'];
-  totalSchools: number;
-  accent: 'cyan' | 'amber';
-  empty: string;
-}) {
-  const bar =
-    accent === 'cyan' ? 'bg-cyan-500' : 'bg-amber-500';
-  const labelCls =
-    accent === 'cyan' ? 'text-cyan-700' : 'text-amber-700';
-  return (
-    <div>
-      <div className={`mb-2.5 text-sm font-semibold ${labelCls}`}>{title}</div>
-      {units.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-sm text-zinc-500">
-          {empty}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {units.slice(0, 8).map((u) => {
-            const pct = totalSchools > 0 ? (u.schoolCount / totalSchools) * 100 : 0;
-            return (
-              <div key={u.level1Code} className="flex items-center gap-2.5 text-[13.5px]">
-                <div className="w-36 truncate font-medium text-zinc-700" title={u.level1Name}>
-                  {u.level1Name}
-                </div>
-                <div className="flex-1 overflow-hidden rounded-full bg-zinc-100">
-                  <div className={`h-2.5 rounded-full ${bar}`} style={{ width: `${pct}%` }} />
-                </div>
-                <div className="w-16 text-right tabular-nums font-semibold text-zinc-700">
-                  {u.schoolCount}/{totalSchools}
-                </div>
-                <div className="w-14 text-right tabular-nums text-zinc-500">{u.problemCount}문</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── 학교별 비교 (HERO) ─────────────────────────────────────────────────
-// 막대 차트(그룹 평균 점선) + 랭킹 3카드(가장 어려운/특이/평이) + 카드 그리드(차별 단원 ★).
-// 마지막에 SchoolTable 을 접기로 노출 (데이터 디테일 원하는 사람용).
-function SchoolComparison({ data }: { data: AggregateResponse }) {
+// ─── 히어로 (학교 여러 곳) — 한 문장 + 학교별 난이도 막대 ─────────────────
+function HeroMulti({ data }: { data: AggregateResponse }) {
   const groupAvg = data.difficultyDist.overallAvg;
-  // avgDifficulty 있는 학교만 + 높은 난이도 순 정렬
-  const sorted = [...data.schoolBreakdown]
-    .filter((s) => s.avgDifficulty != null)
-    .sort((a, b) => (b.avgDifficulty || 0) - (a.avgDifficulty || 0));
-
-  if (sorted.length === 0) {
-    return (
-      <div className="rounded-lg border border-orange-100 bg-orange-50/30 py-8 text-center text-sm text-zinc-500">
-        평균 난이도 계산 가능한 학교 데이터 없음
-      </div>
+  const sorted = [...data.schoolBreakdown].filter((s) => s.avgDifficulty != null).sort((a, b) => (b.avgDifficulty || 0) - (a.avgDifficulty || 0));
+  const hardest = sorted[0]; const easiest = sorted[sorted.length - 1];
+  const common = data.unitSegmentation.common.slice(0, 2).map((u) => u.level1Name);
+  const thesis = sorted.length === 0
+    ? <>학교 {data.matched.schoolCount}곳의 시험지 {data.matched.examCount}장을 모았습니다.</>
+    : (
+      <>
+        학교 {data.matched.schoolCount}곳 가운데 <span className="accent">{hardest.school}</span>이 {fmt2(hardest.avgDifficulty)}로 가장 어렵고 <span className="accent">{easiest.school}</span>이 {fmt2(easiest.avgDifficulty)}로 가장 평이합니다.
+        {common.length ? <> <span className="accent">{common.join('·')}</span>는 거의 모든 학교가 냅니다.</> : null}
+      </>
     );
-  }
-
-  const hardest = sorted[0];
-  const easiest = sorted[sorted.length - 1];
-  // 가장 특이 = 그룹 평균에서 가장 멀리 떨어진 학교 (절댓값 기준)
-  const mostUnique =
-    groupAvg != null
-      ? [...sorted].sort(
-          (a, b) =>
-            Math.abs((b.avgDifficulty || 0) - groupAvg) -
-            Math.abs((a.avgDifficulty || 0) - groupAvg),
-        )[0]
-      : null;
-  // 차별(unique) 단원 lookup — 학교 카드의 ★ 표시용
-  const uniqueUnits = new Set(data.unitSegmentation.unique.map((u) => u.level1Name));
-
   return (
-    <div className="space-y-6">
-      {/* 1. 학교별 평균 난이도 막대 차트 (그룹 평균 점선) */}
-      <div className="rounded-xl border border-orange-200 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-baseline justify-between">
-          <div className="text-sm font-bold text-zinc-800">학교별 평균 난이도 (높은 순)</div>
-          {groupAvg != null && (
-            <div className="text-[12.5px] text-zinc-500">
-              그룹 평균 <span className="font-bold text-orange-700">{groupAvg.toFixed(2)}</span>
-            </div>
-          )}
-        </div>
-        <div className="space-y-2">
-          {sorted.map((s, i) => {
-            const pct = ((s.avgDifficulty || 0) / 10) * 100;
-            const band = bandFor(s.avgDifficulty);
-            const cls = band ? BAND_COLOR[band] : null;
-            return (
-              <div key={s.school} className="flex items-center gap-3">
-                <div className="w-24 truncate text-right text-[13px] font-semibold text-zinc-800" title={s.school}>
-                  {i === 0 && <span className="mr-1 text-rose-600">▲</span>}
-                  {i === sorted.length - 1 && sorted.length > 1 && <span className="mr-1 text-emerald-600">▼</span>}
-                  {s.school}
-                </div>
-                <div className="relative flex-1 overflow-hidden rounded-full bg-zinc-100" style={{ height: 18 }}>
-                  <div
-                    className={`h-full ${cls?.bar || 'bg-zinc-400'}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                  {/* 그룹 평균 점선 */}
-                  {groupAvg != null && (
-                    <div
-                      className="absolute top-0 bottom-0 border-l-2 border-dashed border-zinc-700/70"
-                      style={{ left: `${(groupAvg / 10) * 100}%` }}
-                      title={`그룹 평균 ${groupAvg.toFixed(2)}`}
-                    />
-                  )}
-                </div>
-                <div className="w-14 text-right tabular-nums text-[14px] font-bold text-zinc-900">
-                  {(s.avgDifficulty || 0).toFixed(2)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-3 flex items-center justify-between text-[11.5px] text-zinc-500">
-          <span>← 평이 (1)</span>
-          <span className="text-zinc-700">┊ 그룹 평균 (점선)</span>
-          <span>최고난도 (10) →</span>
-        </div>
-      </div>
-
-      {/* 2. 랭킹 3카드 — 가장 어려운 / 그룹 대비 가장 특이 / 가장 평이 */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <RankingCard
-          tone="rose"
-          label="가장 어려운 학교"
-          school={hardest.school}
-          metric={hardest.avgDifficulty != null ? hardest.avgDifficulty.toFixed(2) : '-'}
-          band={bandFor(hardest.avgDifficulty)}
-          subtle={
-            groupAvg != null && hardest.avgDifficulty != null
-              ? `그룹 평균 대비 +${(hardest.avgDifficulty - groupAvg).toFixed(2)}`
-              : undefined
-          }
-        />
-        {mostUnique && (
-          <RankingCard
-            tone="amber"
-            label="그룹 대비 가장 특이"
-            school={mostUnique.school}
-            metric={
-              groupAvg != null && mostUnique.avgDifficulty != null
-                ? `${(mostUnique.avgDifficulty - groupAvg) > 0 ? '+' : ''}${(mostUnique.avgDifficulty - groupAvg).toFixed(2)}`
-                : '-'
-            }
-            subtle={`평균 ${(mostUnique.avgDifficulty || 0).toFixed(2)} · ${bandFor(mostUnique.avgDifficulty)}`}
-          />
-        )}
-        <RankingCard
-          tone="emerald"
-          label="가장 평이한 학교"
-          school={easiest.school}
-          metric={easiest.avgDifficulty != null ? easiest.avgDifficulty.toFixed(2) : '-'}
-          band={bandFor(easiest.avgDifficulty)}
-          subtle={
-            groupAvg != null && easiest.avgDifficulty != null
-              ? `그룹 평균 대비 ${(easiest.avgDifficulty - groupAvg).toFixed(2)}`
-              : undefined
-          }
-        />
-      </div>
-
-      {/* 3. 학교별 상세 카드 그리드 (3열) */}
+    <section className="ag-hero">
       <div>
-        <div className="mb-2.5 flex items-baseline justify-between">
-          <div className="text-sm font-bold text-zinc-800">학교별 한눈에 보기</div>
-          <div className="text-[11.5px] text-zinc-500">★ 이 학교 특화 단원 (그룹 30% 이하 학교에서만 출제)</div>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {sorted.map((s) => {
-            const band = bandFor(s.avgDifficulty);
-            const cls = band ? BAND_COLOR[band] : null;
-            const diff = groupAvg != null && s.avgDifficulty != null ? s.avgDifficulty - groupAvg : null;
-            const borderCls =
-              band === '최고난도' ? 'border-rose-300' :
-              band === '매우 난이도 있음' ? 'border-rose-200' :
-              band === '난이도 있음' ? 'border-orange-200' :
-              band === '보통' ? 'border-emerald-200' :
-              band === '평이' ? 'border-yellow-200' : 'border-zinc-200';
-            return (
-              <div
-                key={s.school}
-                className={`rounded-xl border-2 ${borderCls} bg-white p-4 shadow-sm transition-shadow hover:shadow-md`}
-              >
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <h4 className="truncate text-[15.5px] font-bold text-zinc-900" title={s.school}>{s.school}</h4>
-                  <span className="flex-shrink-0 text-[11px] text-zinc-500">
-                    {s.examCount}건 · {s.problemCount}문항
-                  </span>
-                </div>
-                <div className="mb-3 flex items-baseline gap-2">
-                  <span className="text-[28px] font-bold tabular-nums leading-none text-zinc-900">
-                    {(s.avgDifficulty || 0).toFixed(2)}
-                  </span>
-                  {cls && band && (
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${cls.bg} ${cls.text}`}>
-                      {band}
-                    </span>
-                  )}
-                  {diff != null && Math.abs(diff) >= 0.05 && (
-                    <span className={`text-[12.5px] font-bold ${diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {diff > 0 ? '▲' : '▼'} {Math.abs(diff).toFixed(2)}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-orange-600">자주 출제 단원</div>
-                  <div className="flex flex-wrap gap-1">
-                    {s.topUnits.slice(0, 3).map((u) => {
-                      const isUnique = uniqueUnits.has(u.level1Name);
-                      return (
-                        <span
-                          key={u.level1Name}
-                          className={`rounded-md border px-2 py-0.5 text-[12px] ${
-                            isUnique
-                              ? 'border-amber-300 bg-amber-100 text-amber-800'
-                              : 'border-orange-200 bg-orange-50 text-orange-700'
-                          }`}
-                          title={isUnique ? '이 학교 특화 단원 (그룹 30% 이하 학교에서만 출제)' : undefined}
-                        >
-                          {isUnique && '★ '}{u.level1Name}
-                          <span className="ml-1 opacity-60">{u.problemCount}</span>
-                        </span>
-                      );
-                    })}
-                    {s.topUnits.length === 0 && (
-                      <span className="text-[11.5px] text-zinc-400">단원 데이터 없음</span>
-                    )}
-                  </div>
-                </div>
-                {s.stdDevDifficulty != null && (
-                  <div className="mt-2 text-[10.5px] text-zinc-400">
-                    시험지 간 편차 ±{s.stdDevDifficulty.toFixed(2)}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <p className="ag-thesis">{thesis}</p>
+        <div className="ag-kpis">
+          <div className="ag-kpi"><div className="n">{groupAvg != null ? groupAvg.toFixed(2) : '-'}</div><div className="l">전체 평균 난이도</div></div>
+          {hardest && easiest && hardest !== easiest && <div className="ag-kpi"><div className="n">{((hardest.avgDifficulty || 0) - (easiest.avgDifficulty || 0)).toFixed(2)}</div><div className="l">학교 간 최대 차이</div></div>}
+          <div className="ag-kpi"><div className="n">{data.unitSegmentation.common.length}<small>개</small></div><div className="l">대부분 학교가 내는 단원</div></div>
         </div>
       </div>
-
-      {/* 4. 상세 표 (접기) — 그룹 비교 코멘트 포함, 데이터 디테일 원하는 사람용 */}
-      <details className="rounded-lg border border-orange-100 bg-orange-50/20 p-3">
-        <summary className="cursor-pointer text-[13.5px] font-semibold text-orange-700">
-          상세 표 보기 (그룹 비교 코멘트 포함)
-        </summary>
-        <div className="mt-3">
-          <SchoolTable data={data} />
-        </div>
-      </details>
-    </div>
-  );
-}
-
-// ─── 연도별 비교 (학교 1곳) ───────────────────────────────────────────────
-// 학교 상세에서 시험지를 골라 만든 리포트. 같은 학교의 시험지를 연도순으로 놓고
-// 난이도 변화·자주 나온 단원을 보여 준다. 학교 비교 카드(가장 어려운 학교=가장 평이한 학교)를 대신한다.
-function YearComparison({ data }: { data: AggregateResponse }) {
-  const groupAvg = data.difficultyDist.overallAvg;
-  const rows = [...data.exams]
-    .filter((e) => e.avgDifficulty != null)
-    .sort((a, b) => (a.year ?? 0) - (b.year ?? 0) || (a.semester ?? 0) - (b.semester ?? 0) || a.title.localeCompare(b.title));
-
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-lg border border-orange-100 bg-orange-50/30 py-8 text-center text-sm text-zinc-500">
-        난이도를 계산할 수 있는 시험지가 없습니다
-      </div>
-    );
-  }
-
-  const hardest = [...rows].sort((a, b) => (b.avgDifficulty || 0) - (a.avgDifficulty || 0))[0];
-  const easiest = [...rows].sort((a, b) => (a.avgDifficulty || 0) - (b.avgDifficulty || 0))[0];
-  const last = rows[rows.length - 1];
-  const prev = rows.length >= 2 ? rows[rows.length - 2] : null;
-  const recentDelta = prev && last.avgDifficulty != null && prev.avgDifficulty != null ? last.avgDifficulty - prev.avgDifficulty : null;
-
-  return (
-    <div className="space-y-6">
-      {/* 1. 연도순 난이도 막대 (전체 평균 점선) */}
-      <div className="rounded-xl border border-orange-200 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-baseline justify-between">
-          <div className="text-sm font-bold text-zinc-800">시험지별 평균 난이도 (연도순)</div>
-          {groupAvg != null && (
-            <div className="text-[12.5px] text-zinc-500">
-              전체 평균 <span className="font-bold text-orange-700">{groupAvg.toFixed(2)}</span>
-            </div>
-          )}
-        </div>
-        <div className="space-y-2">
-          {rows.map((e, i) => {
-            const pct = ((e.avgDifficulty || 0) / 10) * 100;
-            const band = bandFor(e.avgDifficulty);
-            const cls = band ? BAND_COLOR[band] : null;
-            const before = i > 0 ? rows[i - 1].avgDifficulty : null;
-            const delta = before != null && e.avgDifficulty != null ? e.avgDifficulty - before : null;
-            return (
-              <div key={e.id} className="flex items-center gap-3">
-                <div className="w-32 truncate text-right text-[13px] font-semibold text-zinc-800" title={e.title}>
-                  {examLabel(e)}
-                </div>
-                <div className="relative flex-1 overflow-hidden rounded-full bg-zinc-100" style={{ height: 18 }}>
-                  <div className={`h-full ${cls?.bar || 'bg-zinc-400'}`} style={{ width: `${pct}%` }} />
-                  {groupAvg != null && (
-                    <div
-                      className="absolute top-0 bottom-0 border-l-2 border-dashed border-zinc-700/70"
-                      style={{ left: `${(groupAvg / 10) * 100}%` }}
-                      title={`전체 평균 ${groupAvg.toFixed(2)}`}
-                    />
-                  )}
-                </div>
-                <div className="w-14 text-right tabular-nums text-[14px] font-bold text-zinc-900">
-                  {(e.avgDifficulty || 0).toFixed(2)}
-                </div>
-                <div className="w-14 text-right text-[11.5px] tabular-nums">
-                  {delta == null ? (
-                    <span className="text-zinc-300">—</span>
-                  ) : Math.abs(delta) < 0.05 ? (
-                    <span className="text-zinc-500">≈</span>
-                  ) : (
-                    <span className={`font-bold ${delta > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {delta > 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-3 flex items-center justify-between text-[11.5px] text-zinc-500">
-          <span>← 평이 (1)</span>
-          <span className="text-zinc-700">┊ 전체 평균 (점선) · 오른쪽 화살표는 직전 시험 대비 변화</span>
-          <span>최고난도 (10) →</span>
-        </div>
-      </div>
-
-      {/* 2. 랭킹 3카드 — 가장 어려웠던 시험 / 가장 평이했던 시험 / 최근 변화 */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <RankingCard
-          tone="rose"
-          label="가장 어려웠던 시험"
-          school={examLabel(hardest)}
-          metric={hardest.avgDifficulty != null ? hardest.avgDifficulty.toFixed(2) : '-'}
-          band={bandFor(hardest.avgDifficulty)}
-          subtle={groupAvg != null && hardest.avgDifficulty != null ? `전체 평균 대비 +${(hardest.avgDifficulty - groupAvg).toFixed(2)}` : undefined}
-        />
-        <RankingCard
-          tone="emerald"
-          label="가장 평이했던 시험"
-          school={examLabel(easiest)}
-          metric={easiest.avgDifficulty != null ? easiest.avgDifficulty.toFixed(2) : '-'}
-          band={bandFor(easiest.avgDifficulty)}
-          subtle={groupAvg != null && easiest.avgDifficulty != null ? `전체 평균 대비 ${(easiest.avgDifficulty - groupAvg).toFixed(2)}` : undefined}
-        />
-        <RankingCard
-          tone="amber"
-          label="최근 변화"
-          school={prev ? `${examLabel(prev)} → ${examLabel(last)}` : examLabel(last)}
-          metric={recentDelta == null ? '-' : `${recentDelta > 0 ? '+' : ''}${recentDelta.toFixed(2)}`}
-          subtle={
-            recentDelta == null
-              ? '비교할 직전 시험이 없습니다'
-              : Math.abs(recentDelta) < 0.3
-                ? '직전 시험과 비슷한 수준'
-                : recentDelta > 0
-                  ? '직전 시험보다 어려워졌습니다'
-                  : '직전 시험보다 평이해졌습니다'
-          }
-        />
-      </div>
-
-      {/* 3. 시험지별 카드 — 자주 나온 단원 */}
       <div>
-        <div className="mb-2.5 text-sm font-bold text-zinc-800">시험지별 한눈에 보기</div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {rows.map((e) => {
-            const band = bandFor(e.avgDifficulty);
-            const cls = band ? BAND_COLOR[band] : null;
-            const diff = groupAvg != null && e.avgDifficulty != null ? e.avgDifficulty - groupAvg : null;
-            const borderCls =
-              band === '최고난도' ? 'border-rose-300' :
-              band === '매우 난이도 있음' ? 'border-rose-200' :
-              band === '난이도 있음' ? 'border-orange-200' :
-              band === '보통' ? 'border-emerald-200' :
-              band === '평이' ? 'border-yellow-200' : 'border-zinc-200';
-            return (
-              <div key={e.id} className={`rounded-xl border-2 ${borderCls} bg-white p-4 shadow-sm`}>
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <h4 className="truncate text-[15.5px] font-bold text-zinc-900" title={e.title}>{examLabel(e)}</h4>
-                  <span className="flex-shrink-0 text-[11px] text-zinc-500">{e.problemCount}문항</span>
-                </div>
-                <div className="mb-3 flex items-baseline gap-2">
-                  <span className="text-[28px] font-bold tabular-nums leading-none text-zinc-900">
-                    {(e.avgDifficulty || 0).toFixed(2)}
-                  </span>
-                  {cls && band && (
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${cls.bg} ${cls.text}`}>{band}</span>
-                  )}
-                  {diff != null && Math.abs(diff) >= 0.05 && (
-                    <span className={`text-[12.5px] font-bold ${diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {diff > 0 ? '▲' : '▼'} {Math.abs(diff).toFixed(2)}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-orange-600">자주 나온 단원</div>
-                  <div className="flex flex-wrap gap-1">
-                    {(e.topUnits ?? []).map((u) => (
-                      <span key={u.level1Name} className="rounded-md border border-orange-200 bg-orange-50 px-2 py-0.5 text-[12px] text-orange-700">
-                        {u.level1Name}
-                        <span className="ml-1 opacity-60">{u.problemCount}</span>
-                      </span>
-                    ))}
-                    {(e.topUnits ?? []).length === 0 && (
-                      <span className="text-[11.5px] text-zinc-400">단원 데이터 없음</span>
-                    )}
-                  </div>
-                </div>
-                {e.hasAnalysis && e.shareToken && (
-                  <div className="mt-3 border-t border-orange-100 pt-2.5">
-                    <a
-                      href={`/share/exam/${e.shareToken}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-50 px-2.5 py-1.5 text-[12px] font-bold text-orange-700 hover:bg-orange-100"
-                    >
-                      상세 보기 →
-                    </a>
-                  </div>
-                )}
+        <div className="ag-bars">
+          {sorted.slice(0, 10).map((s) => (
+            <div key={s.school} className="ag-bar">
+              <div className="name" title={s.school}>{s.school}</div>
+              <div className="track">
+                <div className="fill" style={{ width: `${((s.avgDifficulty || 0) / 10) * 100}%`, background: diffColor(s.avgDifficulty) }} />
+                {groupAvg != null && <div className="avg" style={{ left: `${(groupAvg / 10) * 100}%` }} title={`전체 평균 ${groupAvg.toFixed(2)}`} />}
               </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RankingCard({
-  tone,
-  label,
-  school,
-  metric,
-  band,
-  subtle,
-}: {
-  tone: 'rose' | 'amber' | 'emerald';
-  label: string;
-  school: string;
-  metric: string;
-  band?: string | null;
-  subtle?: string;
-}) {
-  const toneCls = {
-    rose: 'border-rose-300 bg-gradient-to-br from-rose-50 to-rose-50/30',
-    amber: 'border-amber-300 bg-gradient-to-br from-amber-50 to-amber-50/30',
-    emerald: 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-50/30',
-  }[tone];
-  const labelCls = {
-    rose: 'text-rose-700',
-    amber: 'text-amber-700',
-    emerald: 'text-emerald-700',
-  }[tone];
-  const metricCls = {
-    rose: 'text-rose-700',
-    amber: 'text-amber-700',
-    emerald: 'text-emerald-700',
-  }[tone];
-  return (
-    <div className={`rounded-xl border-2 ${toneCls} p-4 shadow-sm`}>
-      <div className={`mb-1.5 text-[11.5px] font-bold uppercase tracking-wider ${labelCls}`}>{label}</div>
-      <div className="text-[16px] font-bold text-zinc-900">{school}</div>
-      <div className="mt-1.5 flex items-baseline gap-2">
-        <span className={`text-[26px] font-bold tabular-nums leading-none ${metricCls}`}>{metric}</span>
-        {band && <span className="text-[11.5px] font-semibold text-zinc-600">{band}</span>}
-      </div>
-      {subtle && <div className="mt-1.5 text-[11.5px] text-zinc-500">{subtle}</div>}
-    </div>
-  );
-}
-
-function SchoolTable({ data }: { data: AggregateResponse }) {
-  const groupAvg = data.difficultyDist.overallAvg;
-  return (
-    <div className="overflow-x-auto rounded-lg border border-orange-100">
-      <table className="w-full text-[13.5px]">
-        <thead>
-          <tr className="border-b border-orange-200 bg-orange-50/50 text-[11.5px] uppercase tracking-wider text-zinc-600">
-            <th className="px-3 py-2.5 text-left">학교</th>
-            <th className="px-3 py-2.5 text-right">시험지</th>
-            <th className="px-3 py-2.5 text-right">문항</th>
-            <th className="px-3 py-2.5 text-left">평균 난이도</th>
-            <th className="px-3 py-2.5 text-left">그룹 비교</th>
-            <th className="px-3 py-2.5 text-left">자주 출제 단원</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.schoolBreakdown.map((s) => {
-            const band = bandFor(s.avgDifficulty);
-            const cls = band ? BAND_COLOR[band] : null;
-            const cmp =
-              s.avgDifficulty != null && groupAvg != null ? compareToGroupKo(s.avgDifficulty, groupAvg) : '-';
-            return (
-              <tr key={s.school} className="border-b border-orange-50">
-                <td className="px-3 py-2.5 font-bold text-zinc-800">{s.school}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{s.examCount}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{s.problemCount}</td>
-                <td className="px-3 py-2.5">
-                  {cls ? (
-                    <span className="inline-flex items-baseline gap-1.5">
-                      <span className="font-bold tabular-nums text-zinc-900">
-                        {(s.avgDifficulty || 0).toFixed(2)}
-                      </span>
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${cls.bg} ${cls.text}`}>
-                        {band}
-                      </span>
-                      {s.stdDevDifficulty != null && (
-                        <span className="text-[11px] text-zinc-500">±{s.stdDevDifficulty.toFixed(1)}</span>
-                      )}
-                    </span>
-                  ) : (
-                    <span className="text-zinc-500">-</span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-zinc-600">{cmp}</td>
-                <td className="px-3 py-2.5">
-                  <div className="flex flex-wrap gap-1">
-                    {s.topUnits.slice(0, 3).map((u) => (
-                      <span
-                        key={u.level1Name}
-                        className="rounded bg-orange-50 px-2 py-0.5 text-[11.5px] text-orange-700"
-                      >
-                        {u.level1Name}
-                        <span className="ml-1 text-orange-400">{u.problemCount}</span>
-                      </span>
-                    ))}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function PitfallView({ data }: { data: AggregateResponse }) {
-  const top = data.pitfalls.slice(0, 6);
-  return (
-    <div>
-      <div className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-zinc-700">
-        <AlertTriangle className="h-4 w-4 text-amber-600" />
-        함정 패턴
-      </div>
-      {top.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-sm text-zinc-500">
-          매칭된 함정 태깅 없음
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {top.map((p) => (
-            <li
-              key={p.code}
-              className="flex items-center justify-between rounded-md border border-amber-100 bg-amber-50/40 px-3.5 py-2.5 text-[13.5px]"
-            >
-              <div>
-                <div className="font-bold text-zinc-800">{p.label}</div>
-                {p.category && <div className="text-[11.5px] text-zinc-500">{p.category}</div>}
-              </div>
-              <div className="text-right">
-                <div className="font-bold text-amber-700">{p.problemCount}문항</div>
-                <div className="text-[11.5px] text-zinc-500">
-                  {p.examCount}/{data.matched.examCount}건
-                </div>
-              </div>
-            </li>
+              <div className="val">{fmt2(s.avgDifficulty)}</div>
+              <div className="tail">{s.examCount}장</div>
+            </div>
           ))}
-        </ul>
-      )}
-    </div>
+        </div>
+        <div className="ag-axis"><span>← 평이 (1)</span><span>┊ 전체 평균</span><span>최고난도 (10) →</span></div>
+        {sorted.length > 10 && <div className="ag-note">상위 10곳만 표시 · 나머지는 아래 표에 있습니다</div>}
+      </div>
+    </section>
   );
 }
 
-function AiNarrativeView({ data }: { data: AggregateResponse }) {
-  // examId → shareToken 매핑 (상세 페이지 진입 링크용)
-  const tokenByExam = new Map<string, string>();
-  for (const e of data.exams) {
-    if (e.shareToken) tokenByExam.set(e.id, e.shareToken);
-  }
+// ─── 연도별 시험지 카드 (학교 1곳) — 요약·고난도 문항·상세 보기까지 한 장에 ──
+function ExamYearCards({ data }: { data: AggregateResponse }) {
+  const rows = [...data.exams].sort((a, b) => (a.year ?? 0) - (b.year ?? 0) || (a.semester ?? 0) - (b.semester ?? 0) || a.title.localeCompare(b.title));
+  const groupAvg = data.difficultyDist.overallAvg;
+  const narr = new Map(data.aiNarratives.map((n) => [n.examId, n]));
   return (
-    <div>
-      <div className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-zinc-700">
-        <Sparkles className="h-4 w-4 text-orange-500" />
-        시험지별 분석 ({data.aiNarratives.length}장)
+    <section className="ag-section">
+      <div className="ag-section-head">
+        <h2 className="ag-section-title"><Layers className="h-4 w-4" />연도별 시험지</h2>
+        <span className="ag-section-desc">직전 시험 대비 변화와 자주 나온 단원, 분석 요약</span>
       </div>
-      {data.aiNarratives.length === 0 ? (
-        <div className="rounded-lg border border-zinc-200 bg-zinc-50 py-6 text-center text-sm text-zinc-500">
-          시험지별 분석 완료 데이터 없음
-        </div>
-      ) : (
-        <div className="max-h-[28rem] space-y-2.5 overflow-y-auto pr-1">
-          {data.aiNarratives.map((n) => (
-            <details
-              key={n.examId}
-              className="rounded-lg border border-orange-100 bg-orange-50/30 p-3.5 text-[14px] open:bg-orange-50/60"
-            >
-              <summary className="cursor-pointer text-[14.5px]">
-                <span className="font-bold text-zinc-800">{n.school}</span>
-                <span className="ml-1.5 text-zinc-500">
-                  {n.year} · {n.examTitle.slice(0, 30)}
-                </span>
-              </summary>
-              {n.summary && (
-                <div className="mt-2.5">
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-orange-600">요약</div>
-                  <p className="leading-[1.75] text-zinc-700">{n.summary}</p>
+      <div className="ag-cards">
+        {rows.map((e, i) => {
+          const prev = i > 0 ? rows[i - 1].avgDifficulty : null;
+          const delta = prev != null && e.avgDifficulty != null ? e.avgDifficulty - prev : null;
+          const n = narr.get(e.id);
+          return (
+            <div key={e.id} className="ag-card">
+              <div className="ag-card-head">
+                <div className="ag-card-year">{examLabel(e)}</div>
+                <div className="ag-card-meta">{e.problemCount}문항</div>
+              </div>
+              <div className="ag-card-num">
+                <span className="n">{fmt2(e.avgDifficulty)}</span>
+                <Band avg={e.avgDifficulty} />
+                <Delta d={delta} />
+              </div>
+              <div>
+                <div className="ag-label">자주 나온 단원</div>
+                <div className="ag-units">
+                  {(e.topUnits ?? []).map((u) => <span key={u.level1Name} className="ag-unit">{u.level1Name}<b>{u.problemCount}</b></span>)}
+                  {(e.topUnits ?? []).length === 0 && <span className="ag-section-desc">단원 데이터 없음</span>}
                 </div>
-              )}
-              {n.hardQuestions.length > 0 && (
-                <div className="mt-3">
-                  <div className="mb-1.5 text-[11px] uppercase tracking-wider text-orange-600">
-                    고난도 문항
-                  </div>
-                  <ul className="space-y-2">
-                    {n.hardQuestions.map((h) => (
-                      <li
-                        key={h.problemId}
-                        className="border-l-2 border-orange-300 pl-2.5 text-zinc-700"
-                      >
-                        <span className="font-bold text-orange-700">#{h.number}</span>
-                        <span className="ml-1.5 font-semibold">{h.subTitle}</span>
-                        <div className="mt-1 text-[13px] leading-relaxed text-zinc-600">{h.intent}</div>
-                      </li>
-                    ))}
+              </div>
+              {n?.summary && <p className="ag-summary">{(() => { const s = plain(n.summary); return s.length > 180 ? `${s.slice(0, 180)}…` : s; })()}</p>}
+              {n && n.hardQuestions.length > 0 && (
+                <div>
+                  <div className="ag-label">고난도 문항</div>
+                  <ul className="ag-hard" style={{ marginTop: 6 }}>
+                    {n.hardQuestions.slice(0, 2).map((h) => <li key={h.problemId}><b>#{h.number}</b>{plain(h.subTitle)}</li>)}
                   </ul>
                 </div>
               )}
-              {tokenByExam.has(n.examId) && (
-                <div className="mt-3 border-t border-orange-200 pt-2.5">
-                  <a
-                    href={`/share/exam/${tokenByExam.get(n.examId)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3.5 py-2 text-[13px] font-bold text-white hover:bg-orange-600"
-                  >
-                    이 시험지 상세 분석 보기 →
-                  </a>
-                  <span className="ml-2 text-[11.5px] text-zinc-500">
-                    수식·풀이 단계·학습 전략까지
-                  </span>
-                </div>
-              )}
-            </details>
-          ))}
-        </div>
-      )}
-    </div>
+              <div className="ag-card-foot">
+                {e.hasAnalysis && e.shareToken ? (
+                  <a className="ag-link" href={`/share/exam/${e.shareToken}`} target="_blank" rel="noopener noreferrer">상세 보기 →</a>
+                ) : (
+                  <span className="ag-section-desc">{groupAvg != null && e.avgDifficulty != null ? `전체 평균 대비 ${signed(e.avgDifficulty - groupAvg)}` : ''}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
-function ExamTable({ data }: { data: AggregateResponse }) {
+// ─── 학교 카드 (학교 여러 곳) ─────────────────────────────────────────────
+function SchoolCards({ data }: { data: AggregateResponse }) {
+  const groupAvg = data.difficultyDist.overallAvg;
+  const sorted = [...data.schoolBreakdown].sort((a, b) => (b.avgDifficulty ?? -1) - (a.avgDifficulty ?? -1));
+  const unique = new Set(data.unitSegmentation.unique.map((u) => u.level1Name));
   return (
-    <div className="overflow-x-auto rounded-lg border border-orange-100">
-      <table className="w-full text-[13.5px]">
-        <thead>
-          <tr className="border-b border-orange-200 bg-orange-50/50 text-[11.5px] uppercase tracking-wider text-zinc-600">
-            <th className="px-3 py-2.5 text-left">제목</th>
-            <th className="px-3 py-2.5 text-left">학교</th>
-            <th className="px-3 py-2.5 text-left">메타</th>
-            <th className="px-3 py-2.5 text-right">문항</th>
-            <th className="px-3 py-2.5 text-left">난이도</th>
-            <th className="px-3 py-2.5 text-center">상세</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.exams.map((e) => {
-            const band = bandFor(e.avgDifficulty);
-            const cls = band ? BAND_COLOR[band] : null;
-            return (
-              <tr key={e.id} className="border-b border-orange-50">
-                <td className="max-w-md truncate px-3 py-2.5 text-zinc-800" title={e.title}>
-                  {e.title}
-                </td>
-                <td className="px-3 py-2.5 font-semibold text-zinc-700">{e.school}</td>
-                <td className="px-3 py-2.5 text-zinc-500">
-                  {[e.year, e.semester ? `${e.semester}학기` : '', e.examType]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-zinc-700">{e.problemCount}</td>
-                <td className="px-3 py-2.5">
-                  {cls ? (
-                    <span className="inline-flex items-baseline gap-1.5">
-                      <span className="font-bold tabular-nums text-zinc-900">
-                        {(e.avgDifficulty || 0).toFixed(2)}
-                      </span>
-                      <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${cls.bg} ${cls.text}`}>
-                        {band}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="text-zinc-400">-</span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-center">
-                  {e.hasAnalysis && e.shareToken ? (
-                    <a
-                      href={`/share/exam/${e.shareToken}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-50 px-2.5 py-1.5 text-[12px] font-bold text-orange-700 hover:bg-orange-100"
-                    >
-                      상세 보기 →
-                    </a>
-                  ) : e.hasAnalysis ? (
-                    <span className="text-[12px] text-zinc-400">분석 완료</span>
-                  ) : (
-                    <span className="text-zinc-300">-</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <section className="ag-section">
+      <div className="ag-section-head">
+        <h2 className="ag-section-title"><Layers className="h-4 w-4" />학교별 한눈에 보기</h2>
+        <span className="ag-section-desc">★ 표시는 소수 학교만 내는 그 학교 특화 단원</span>
+      </div>
+      <div className="ag-cards">
+        {sorted.map((s) => {
+          const diff = groupAvg != null && s.avgDifficulty != null ? s.avgDifficulty - groupAvg : null;
+          return (
+            <div key={s.school} className="ag-card">
+              <div className="ag-card-head">
+                <div className="ag-card-year">{s.school}</div>
+                <div className="ag-card-meta">{s.examCount}장 · {s.problemCount}문항</div>
+              </div>
+              <div className="ag-card-num">
+                <span className="n">{fmt2(s.avgDifficulty)}</span>
+                <Band avg={s.avgDifficulty} />
+                <Delta d={diff} />
+              </div>
+              <div>
+                <div className="ag-label">자주 출제 단원</div>
+                <div className="ag-units">
+                  {s.topUnits.slice(0, 3).map((u) => <span key={u.level1Name} className="ag-unit">{unique.has(u.level1Name) ? '★ ' : ''}{u.level1Name}<b>{u.problemCount}</b></span>)}
+                  {s.topUnits.length === 0 && <span className="ag-section-desc">단원 데이터 없음</span>}
+                </div>
+              </div>
+              {s.stdDevDifficulty != null && <div className="ag-section-desc">시험지 간 편차 ±{s.stdDevDifficulty.toFixed(2)}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
-function compareToGroupKo(schoolAvg: number, groupAvg: number): string {
-  const diff = schoolAvg - groupAvg;
-  const abs = Math.abs(diff);
-  if (abs < 0.3) return '평균과 거의 동일';
-  const sign = diff > 0 ? '+' : '−';
-  if (abs < 1) return `${sign}${abs.toFixed(1)} 약간 ${diff > 0 ? '높음' : '낮음'}`;
-  if (abs < 2) return `${sign}${abs.toFixed(1)} 한 밴드 차이`;
-  return `${sign}${abs.toFixed(1)} 두 밴드 이상 ${diff > 0 ? '높음' : '낮음'}`;
+// ─── 단원 출제 표 — 행 = 단원, 열 = 연도(학교 1곳) / 학교(여러 곳) ─────────
+function UnitHeat({ data, single }: { data: AggregateResponse; single: boolean }) {
+  const units = data.unitFrequency.slice(0, 10);
+  if (units.length === 0) {
+    return (
+      <section className="ag-section">
+        <div className="ag-section-head"><h2 className="ag-section-title"><Grid3X3 className="h-4 w-4" />단원 출제 표</h2></div>
+        <div className="ag-empty">분류된 문항이 없어 단원 표를 만들 수 없습니다</div>
+      </section>
+    );
+  }
+  // 열
+  const cols: Array<{ key: string; label: string; sub?: string }> = single
+    ? [...data.exams].sort((a, b) => (a.year ?? 0) - (b.year ?? 0) || (a.semester ?? 0) - (b.semester ?? 0)).map((e) => ({ key: e.id, label: e.year ? `${e.year}` : e.title.slice(0, 8), sub: examLabel(e, false) }))
+    : [...data.schoolBreakdown].sort((a, b) => b.problemCount - a.problemCount).slice(0, 8).map((s) => ({ key: s.school, label: s.school }));
+  // 셀 값 — unitCounts(전체)가 있으면 정확한 수, 없으면(옛 응답) topUnits 로만 채우고 나머지는 '·'
+  const cell = (unitName: string, col: { key: string }): number | null => {
+    const src = single
+      ? data.exams.find((x) => x.id === col.key)
+      : data.schoolBreakdown.find((x) => x.school === col.key);
+    if (!src) return null;
+    if (src.unitCounts) return src.unitCounts.find((u) => u.level1Name === unitName)?.problemCount ?? 0;
+    const hit = (src.topUnits ?? []).find((u) => u.level1Name === unitName);
+    return hit ? hit.problemCount : null;
+  };
+  const max = Math.max(1, ...units.map((u) => u.problemCount));
+  return (
+    <section className="ag-section">
+      <div className="ag-section-head">
+        <h2 className="ag-section-title"><Grid3X3 className="h-4 w-4" />단원 출제 표</h2>
+        <span className="ag-section-desc">{single ? '어느 해에 어떤 단원이 몇 문항 나왔는지' : '어느 학교가 어떤 단원을 몇 문항 내는지'}</span>
+      </div>
+      <div className="ag-heat-wrap">
+        <table className="ag-heat">
+          <thead>
+            <tr>
+              <th>단원</th>
+              {cols.map((c) => <th key={c.key}>{c.label}{c.sub ? <><br /><span style={{ fontWeight: 400 }}>{c.sub}</span></> : null}</th>)}
+              <th>합계</th>
+            </tr>
+          </thead>
+          <tbody>
+            {units.map((u) => (
+              <tr key={u.level1Code}>
+                <td className="u">{u.level1Name}<small>{single ? `${u.examCount}/${data.exams.length}회 출제` : `${u.schoolCount}/${data.matched.schoolCount}곳 출제`}</small></td>
+                {cols.map((c) => {
+                  const v = cell(u.level1Name, c);
+                  const alpha = v == null || v === 0 ? 0 : 0.12 + 0.55 * Math.min(1, v / Math.max(1, max / Math.max(1, cols.length)));
+                  return (
+                    <td key={c.key}>
+                      <span className={`cell${!v ? ' zero' : ''}`} style={{ background: v ? `color-mix(in srgb, var(--rp-accent) ${Math.round(alpha * 100)}%, var(--rp-paper))` : undefined }}>
+                        {v == null ? '·' : v}
+                      </span>
+                    </td>
+                  );
+                })}
+                <td className="t">{u.problemCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="ag-heat-legend">
+        <span>진할수록 많이 출제</span>
+        <span>· = 자료 없음</span>
+        {units.length < data.unitFrequency.length && <span>상위 {units.length}개 단원만 표시</span>}
+      </div>
+    </section>
+  );
+}
+
+// ─── 난이도 분포 (학교 여러 곳) ──────────────────────────────────────────
+function DifficultyBands({ data }: { data: AggregateResponse }) {
+  const dd = data.difficultyDist;
+  const total = dd.examWithAvgCount;
+  const colorOf: Record<string, string> = { '평이': 'var(--rp-diff-low)', '보통': 'var(--rp-diff-mid)', '난이도 있음': 'var(--rp-diff-high)', '매우 난이도 있음': 'var(--rp-diff-extra)', '최고난도': '#9F4F4A' };
+  return (
+    <section className="ag-section">
+      <div className="ag-section-head">
+        <h2 className="ag-section-title"><BarChart3 className="h-4 w-4" />시험지 난이도 분포</h2>
+        <span className="ag-section-desc">시험지 {total}장을 평균 난이도 단계별로 나눴습니다</span>
+      </div>
+      <div className="ag-bars">
+        {dd.examBandCounts.map((b) => {
+          const pct = total > 0 ? (b.examCount / total) * 100 : 0;
+          return (
+            <div key={b.band} className="ag-bar">
+              <div className="name">{b.band}</div>
+              <div className="track"><div className="fill" style={{ width: `${pct}%`, background: colorOf[b.band] ?? 'var(--rp-accent)' }} /></div>
+              <div className="val">{b.examCount}장</div>
+              <div className="tail">{pct.toFixed(0)}%</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="ag-note">1~2 평이(교과서 기본) · 3~4 보통 · 5~6 난이도 있음(내신 평균) · 7~8 매우 난이도 있음(상위권 변별) · 9~10 최고난도</div>
+    </section>
+  );
+}
+
+// ─── 함정 ────────────────────────────────────────────────────────────────
+function Pitfalls({ data }: { data: AggregateResponse }) {
+  return (
+    <section className="ag-section">
+      <div className="ag-section-head">
+        <h2 className="ag-section-title"><AlertTriangle className="h-4 w-4" />자주 걸리는 함정</h2>
+        <span className="ag-section-desc">학생들이 같은 방식으로 틀리기 쉬운 지점</span>
+      </div>
+      <ul className="ag-pits">
+        {data.pitfalls.slice(0, 6).map((p) => (
+          <li key={p.code} className="ag-pit">
+            <div><div className="l">{p.label}</div>{p.category && <div className="c">{p.category}</div>}</div>
+            <div className="n">{p.problemCount}문항<small>{p.examCount}/{data.matched.examCount}장</small></div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// ─── 시험지 목록 (학교 여러 곳) ──────────────────────────────────────────
+function ExamTable({ data }: { data: AggregateResponse }) {
+  const rows = [...data.exams].sort((a, b) => a.school.localeCompare(b.school) || (b.year ?? 0) - (a.year ?? 0));
+  return (
+    <section className="ag-section">
+      <div className="ag-section-head">
+        <h2 className="ag-section-title"><ScrollText className="h-4 w-4" />시험지 목록</h2>
+        <span className="ag-section-desc">{rows.length}장 · 분석 완료 시험지는 상세 보기로 들어갈 수 있습니다</span>
+      </div>
+      <div className="ag-table-wrap">
+        <table className="ag-table">
+          <thead><tr><th>학교</th><th>시험</th><th>제목</th><th style={{ textAlign: 'right' }}>문항</th><th>난이도</th><th></th></tr></thead>
+          <tbody>
+            {rows.map((e) => (
+              <tr key={e.id}>
+                <td style={{ fontWeight: 600, color: 'var(--rp-text)' }}>{e.school}</td>
+                <td>{examLabel(e)}</td>
+                <td className="title" title={e.title}>{e.title}</td>
+                <td className="num">{e.problemCount}</td>
+                <td><span style={{ fontWeight: 700, color: 'var(--rp-text)', marginRight: 6 }}>{fmt2(e.avgDifficulty)}</span><Band avg={e.avgDifficulty} /></td>
+                <td>{e.hasAnalysis && e.shareToken ? <a className="ag-link ghost" href={`/share/exam/${e.shareToken}`} target="_blank" rel="noopener noreferrer">상세 보기 →</a> : null}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
