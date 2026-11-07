@@ -23,8 +23,22 @@ import { schoolNameVariants } from '@/lib/utils/school-normalize';
 import { extractExamYear } from '@/lib/utils/year-extract';
 import { extractSemester, extractExamType } from '@/lib/utils/exam-meta-extract';
 import { DIFFICULTY_BANDS, difficultyToBand } from '@/lib/utils/difficulty-label';
+import { resolveReportVariant, type ReportBrand } from '@/lib/report/report-brand';
+import { randomBytes } from 'crypto';
 
 export const dynamic = 'force-dynamic';
+
+/** 로그인 사용자의 센터 → 학원 slug (리포트 학원 표기용). 공통풀·조회 실패는 null. */
+async function orgSlugOfInstitute(instituteId: string | null | undefined): Promise<string | null> {
+  if (!instituteId || !supabaseAdmin) return null;
+  try {
+    const { data: inst } = await supabaseAdmin.from('institutes').select('organization_id').eq('id', instituteId).maybeSingle();
+    const orgId = (inst as { organization_id?: string | null } | null)?.organization_id;
+    if (!orgId) return null;
+    const { data: org } = await supabaseAdmin.from('organizations').select('slug').eq('id', orgId).maybeSingle();
+    return (org as { slug?: string } | null)?.slug ?? null;
+  } catch { return null; }
+}
 
 interface UnitRow {
   level1Code: string;
@@ -66,6 +80,8 @@ interface ExamRow {
   hasAnalysis: boolean;
   shareToken: string | null;
   createdAt: string;
+  /** 이 시험지에서 많이 나온 단원 TOP 3 — 학교 1곳 리포트의 연도별 비교용 (2026-11-07) */
+  topUnits: Array<{ level1Name: string; problemCount: number }>;
 }
 
 interface UnitTrend {
@@ -93,9 +109,11 @@ interface AiNarrative {
 }
 
 export async function GET(request: NextRequest) {
+  // ★ 공개 공유(/share/aggregate) — 2026-11-07 학부모 설명회: 링크를 받은 학부모가 열면 401 만 떴다.
+  //   비로그인은 공통풀(institute_id NULL = 학교기출 전부) 시험지만, examIds 또는 schools 로 좁힌 요청만 읽기 전용 허용.
+  //   학원 격리 시험지는 로그인 범위(applyInstituteFilter)로만 본다.
   const authed = await requireAuthScope();
-  if (!authed.ok) return authed.response;
-  const { scope } = authed.data;
+  const scope = authed.ok ? authed.data.scope : null;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
@@ -122,6 +140,12 @@ export async function GET(request: NextRequest) {
   const filterSemester = semesterParam ? (parseInt(semesterParam, 10) as 1 | 2) : null;
   const filterExamType = examTypeParam || null;
   const filterSchools = schoolsParam ? schoolsParam.split(',').map((s) => s.trim()).filter(Boolean) : null;
+  if (!scope && !authed.ok && !filterExamIds && !filterSchools) return authed.response;
+
+  // ★ 리포트 학원 표기·디자인 — 로그인이면 내 센터의 학원으로, 공개 링크는 대시보드가 붙여 준 brand(디자인)·org(학원) 파라미터로.
+  const brandParam = searchParams.get('brand');
+  const orgSlug = scope ? await orgSlugOfInstitute(scope.instituteId) : (searchParams.get('org') || null);
+  const brand: ReportBrand = resolveReportVariant(brandParam, orgSlug);
 
   // ─────────────────────────────────────────────────────────────────────
   // 1) 시험지 + 분석/공유 + 문제 + 분류 + 함정 일괄 조회 (nested join)
@@ -157,7 +181,9 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     // ★ institute 격리 — 공통풀(NULL)은 공유 라이브러리로 유지, isolated org 만 격리
-    query = applyInstituteFilter(query, scope, { allowCommonPool: true });
+    query = scope
+      ? applyInstituteFilter(query, scope, { allowCommonPool: true })
+      : query.is('institute_id', null);
     if (filterGrade) query = query.eq('grade', filterGrade);
     if (filterExamIds) query = query.in('id', filterExamIds);
     else if (schoolPrefilter) query = query.or(schoolPrefilter);
@@ -299,6 +325,7 @@ export async function GET(request: NextRequest) {
 
     // 시험지 단위 난이도 — 이 시험지의 problem difficulty 들 모음
     const examProblemDiffs: number[] = [];
+    const examUnitCounts = new Map<string, number>(); // level1Name → count (시험지별 TOP 단원)
 
     for (const ep of eps) {
       // Supabase 관계 inference 로 array 또는 단일 row 가능 — 안전하게 둘 다 처리
@@ -336,6 +363,7 @@ export async function GET(request: NextRequest) {
           u.schools.add(school);
 
           sStat.unitCounts.set(level1Name, (sStat.unitCounts.get(level1Name) || 0) + 1);
+          examUnitCounts.set(level1Name, (examUnitCounts.get(level1Name) || 0) + 1);
         }
       }
 
@@ -379,7 +407,22 @@ export async function GET(request: NextRequest) {
       hasAnalysis,
       shareToken: e.share_token,
       createdAt: e.created_at || '',
+      topUnits: Array.from(examUnitCounts.entries())
+        .map(([level1Name, problemCount]) => ({ level1Name, problemCount }))
+        .sort((a, b) => b.problemCount - a.problemCount)
+        .slice(0, 3),
     });
+  }
+
+  // ★ 분석 완료인데 공유 토큰이 없는 시험지는 로그인(대시보드) 호출에서 자동 발급 — 학부모 리포트의 「상세 보기」가 일부만 열리던 것 (2026-11-07).
+  //   공개 호출은 쓰지 않는다. 발급 실패는 무시(버튼만 안 뜸).
+  if (scope) {
+    for (const row of examRows) {
+      if (!row.hasAnalysis || row.shareToken) continue;
+      const token = randomBytes(16).toString('hex');
+      const { error: tokErr } = await supabaseAdmin.from('exams').update({ share_token: token }).eq('id', row.id).is('share_token', null);
+      if (!tokErr) row.shareToken = token;
+    }
   }
 
   // 평균/표준편차 계산기
@@ -757,5 +800,8 @@ export async function GET(request: NextRequest) {
     availableYears,
     aiNarratives,
     narrative,
+    // ★ 학원 표기·디자인 + 공개 링크에 붙일 파라미터 (대시보드가 공유 링크를 만들 때 사용)
+    brand,
+    shareParams: { brand: brand.key, org: orgSlug },
   });
 }

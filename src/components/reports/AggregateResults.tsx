@@ -111,6 +111,8 @@ export interface AggregateResponse {
     generatedAt: string | null;
   }>;
   narrative: Array<{ heading: string; paragraphs: string[] }>;
+  /** 공개 링크에 붙일 학원 표기·디자인 파라미터 (2026-11-07) */
+  shareParams?: { brand: string; org: string | null };
 }
 
 const fmt = (n: number) => n.toLocaleString('ko-KR');

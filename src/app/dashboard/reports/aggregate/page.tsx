@@ -147,9 +147,13 @@ export default function AggregatePage() {
 
   // 학부모 공유 — 새 탭으로 열기 + 클립보드 복사 동시 (popup 차단 회피용 anchor 기반)
   const [shareCopied, setShareCopied] = useState(false);
+  // ★ 공개 링크에 학원 표기·디자인 파라미터 (비로그인 학부모는 세션이 없어 서버가 학원을 못 안다)
+  const shareSuffix = data?.shareParams
+    ? `&brand=${encodeURIComponent(data.shareParams.brand)}${data.shareParams.org ? `&org=${encodeURIComponent(data.shareParams.org)}` : ''}`
+    : '';
   const handleShareClick = async () => {
     if (typeof window === 'undefined') return;
-    const url = `${window.location.origin}/share/aggregate?${lastQuery ?? buildQueryString()}`;
+    const url = `${window.location.origin}/share/aggregate?${lastQuery ?? buildQueryString()}${shareSuffix}`;
     try {
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
@@ -193,7 +197,7 @@ export default function AggregatePage() {
             </span>
             {data && data.matched.examCount > 0 && lastQuery != null && (
               <a
-                href={`/share/aggregate?${lastQuery}`}
+                href={`/share/aggregate?${lastQuery}${shareSuffix}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={handleShareClick}
