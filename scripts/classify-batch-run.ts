@@ -36,6 +36,8 @@ const REUSE_FROM = ARG('reuse-stage2-from') || '';
 const EXAM_TYPE = ARG('exam-type') || '';
 const PER_EXAM = Number(ARG('per-exam') || 0);
 const NEWEST = process.argv.includes('--newest'); // 제목 역순(최근 시험지부터)
+// 특정 시점 이후 만들어진 시험지만 (예: 일괄 적재 직후 그 묶음만 분류) — ISO 시각, exams.created_at >= 값
+const SINCE = ARG('since') || '';
 if (!RUN) { console.error('--run=<id> 필수'); process.exit(1); }
 
 for (const line of fs.readFileSync('.env.local', 'utf-8').split('\n')) {
@@ -90,6 +92,7 @@ async function select(): Promise<Target[]> {
   const exams = (await pageAll<ExamRow>((a, b) => {
     let q = db.from('exams').select('id,title,subject,grade,curriculum_codes').is('deleted_at', null).overlaps('curriculum_codes', SUBJECTS);
     if (EXAM_TYPE) q = q.eq('exam_type', EXAM_TYPE);
+    if (SINCE) q = q.gte('created_at', SINCE);
     return q.range(a, b);
   }))
     // 과목 코드가 전부 대상 과목 안에 있어야 한다 (중등+고등 섞인 시험지는 제외)
