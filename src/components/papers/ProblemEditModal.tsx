@@ -1449,7 +1449,7 @@ export function ProblemEditModal({
         )}
 
         {/* ======== 메인: 3열 — min-h 제거하여 작은 모니터에서 저장 버튼 가려지지 않도록 ======== */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 min-h-[240px] overflow-hidden">
           {/* 좌: 문제 에디터 */}
           <div className="flex-1 flex flex-col p-3 min-w-0 overflow-hidden">
             <EditorPanel
@@ -1517,8 +1517,8 @@ export function ProblemEditModal({
           </div>
         </div>
 
-        {/* ======== 하단: 선택지 — 컴팩트, 위 수정 영역이 더 넓게 ======== */}
-        <div className="border-t border-subtle px-3 py-2 flex-shrink-0">
+        {/* ======== 하단: 선택지 — 높이 상한 45% + 자체 스크롤. 1줄 보기(보기마다 도식 줄)가 길면 위 문제·해설 에디터가 0 으로 눌려 사라지던 것 (2026-11-04) ======== */}
+        <div className="border-t border-subtle px-3 py-2 flex-shrink-0 max-h-[45%] overflow-y-auto">
           <ChoicesEditor
             choices={choices} onChange={setChoices}
             correctAnswer={correctAnswer} onCorrectAnswerChange={setCorrectAnswer}
