@@ -52,6 +52,12 @@ interface ExamRow {
   overallDifficulty: string | null;
   unitCount: number;
   analysis: ExamAIAnalysis | null;
+  /** 문항 분류 기준 (2026-11-09) */
+  classifiedCount: number;
+  avgDifficulty: number | null;
+  difficultyLabel: string | null;
+  feel: string | null;
+  unitCounts: Array<{ unit: string; problemCount: number }>;
 }
 
 interface SchoolDetail {
@@ -62,6 +68,7 @@ interface SchoolDetail {
     sharedExams: number;
     totalProblems: number;
     totalPoints: number;
+    classifiedProblems: number;
   };
   gradeDistribution: Array<{ grade: string; count: number }>;
   topUnits: Array<{ unit: string; problemCount: number }>;
@@ -76,6 +83,8 @@ const DIFF_COLOR: Record<string, string> = {
   '난이도 있음': 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   '매우 난이도 있음': 'bg-rose-500/15 text-rose-300 border-rose-500/30',
 };
+// 5단계 밴드(difficulty-label.ts)의 최고난도는 매우 난이도 있음과 같은 색으로 — 크롬 채도색 추가 없이
+DIFF_COLOR['최고난도'] = DIFF_COLOR['매우 난이도 있음'];
 
 const fmt = (n: number) => n.toLocaleString('ko-KR');
 const fmtDate = (iso: string | null | undefined) => {
@@ -318,12 +327,19 @@ export default function SchoolReportPage() {
       {/* Body — 섹션 순차 진입 */}
       <motion.div variants={listVariants} initial="hidden" animate="show" className="flex-1 overflow-y-auto px-8 py-6">
         {/* 통계 4 카드 */}
-        <motion.div variants={itemVariants} className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <motion.div variants={itemVariants} className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <StatCard
             label="시험지"
             value={data.summary.totalExams}
             unit="건"
             icon={<FileText className="h-4 w-4" />}
+          />
+          <StatCard
+            label="유형 분류 문항"
+            value={data.summary.classifiedProblems ?? 0}
+            unit={`/ ${data.summary.totalProblems}`}
+            icon={<Layers className="h-4 w-4" />}
+            accent="cyan"
           />
           <StatCard
             label="AI 분석 완료"
@@ -372,7 +388,7 @@ export default function SchoolReportPage() {
           {/* 자주 출제 단원 TOP10 */}
           <Panel title="자주 출제되는 단원" icon={<TrendingUp className="h-4 w-4" />}>
             {data.topUnits.length === 0 ? (
-              <Empty>분석 완료된 시험지가 없습니다</Empty>
+              <Empty>유형 분류된 문항이 없습니다</Empty>
             ) : (
               <div className="space-y-2">
                 {data.topUnits.map((u, i) => {
@@ -399,8 +415,8 @@ export default function SchoolReportPage() {
         {/* 난이도 분포 */}
         {Object.values(data.overallDifficultyDist).some((v) => v > 0) && (
           <Panel title="시험지 난이도 분포" icon={<Sparkles className="h-4 w-4" />}>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {(['평이', '보통', '난이도 있음', '매우 난이도 있음'] as const).map((d) => (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {(['평이', '보통', '난이도 있음', '매우 난이도 있음', '최고난도'] as const).map((d) => (
                 <div
                   key={d}
                   className={`rounded-lg border px-3 py-3 ${DIFF_COLOR[d]}`}
@@ -596,13 +612,20 @@ export default function SchoolReportPage() {
                             <span className="text-zinc-600">미생성</span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-center">
-                          {e.overallDifficulty ? (
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${DIFF_COLOR[e.overallDifficulty] || ''}`}
-                            >
-                              {e.overallDifficulty}
-                            </span>
+                        <td className="px-3 py-2 text-center" title={e.feel ?? undefined}>
+                          {e.difficultyLabel ? (
+                            <div className="inline-flex flex-col items-center gap-0.5">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${DIFF_COLOR[e.difficultyLabel] || ''}`}
+                              >
+                                {e.difficultyLabel}{e.avgDifficulty != null ? ` ${e.avgDifficulty.toFixed(1)}` : ''}
+                              </span>
+                              {e.feel && (
+                                <span className="max-w-[11rem] truncate text-[10px] text-zinc-500">
+                                  {e.feel.split(' — ')[1] ?? ''}
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-zinc-600">-</span>
                           )}
