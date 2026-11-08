@@ -42,7 +42,8 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABAS
 if (!SUPABASE_URL || !SERVICE_KEY) { console.error('NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 필요 (.env.local)'); process.exit(1); }
 
 const ARG = (k: string) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split('=').slice(1).join('=');
-const ONLY_SCHOOLS = (ARG('school') || '').split(',').map((s) => s.trim()).filter(Boolean);
+// 학교 지정: --school=A,B 또는 환경변수 OBSIDIAN_EXPORT_SCHOOLS (분류 배치가 셸을 거치지 않고 한글 이름을 넘길 때 씀)
+const ONLY_SCHOOLS = (ARG('school') || process.env.OBSIDIAN_EXPORT_SCHOOLS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const DRY = process.argv.includes('--dry');
 const VAULT = process.env.OBSIDIAN_GWASARAM_VAULT || 'C:/옵시디언/과사람지식창고/과사람_지식창고';
 const ROOT = path.join(VAULT, '기출 분석');
