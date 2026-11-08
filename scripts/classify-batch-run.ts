@@ -19,6 +19,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const ARG = (k: string) => process.argv.find((a) => a.startsWith(`--${k}=`))?.split('=').slice(1).join('=');
@@ -333,6 +334,21 @@ async function verifyAndCommit(targets: Target[], preds: Pred[]) {
   }
   const { count } = await db.from('classifications').select('id', { count: 'exact', head: true }).eq('classification_source', source);
   log(`★ 기록 ${inserted}건 — readback ${count}건 (classification_source='${source}')`);
+  if (inserted > 0) exportObsidian(targets);
+}
+
+/**
+ * 분류가 DB 에 기록되면 그 학교의 옵시디언 「기출 분석」 노트를 바로 다시 쓴다(대표 지시 2026-11-08:
+ * "앞으로 분류되면 옵시디언에 들어가게"). 매일 06:10 예약작업이 전체를 다시 쓰므로 여기서 실패해도 다음 날 맞춰진다.
+ */
+function exportObsidian(targets: Target[]) {
+  const schools = Array.from(new Set(targets.map((t) => t.examTitle.match(/^\d{2}-\d-\d-[MF][\s-]+([^\s\-\[(]+)/)?.[1]).filter((x): x is string => !!x)));
+  if (!schools.length) return;
+  try {
+    log(`옵시디언 기출 분석 갱신 → ${schools.join(', ')}`);
+    const out = execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', 'tsx', 'scripts/export-obsidian-exams.ts', `--school=${schools.join(',')}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 10 * 60 * 1000 });
+    log(out.trim().split('\n').slice(-2).join(' | '));
+  } catch (e) { log(`옵시디언 갱신 실패(예약작업이 내일 다시 씁니다): ${String((e as Error).message).slice(0, 200)}`); }
 }
 
 async function main() {
