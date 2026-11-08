@@ -419,8 +419,14 @@ async function main() {
     //   같은 파일이 폴더 두 곳에 있는데, 두 번째를 검사할 때 첫 번째 INSERT 가
     //   아직 조회에 안 잡혀 DB 검사만으로는 못 막았다.
     //   → 이 실행에서 이미 처리한 키를 메모리에 기억해 같은 실행 안의 중복도 막는다.
+    // ★ 2026-11-08 사고 — 키에 과목이 없어 `25-1-1-F 김천고 공통수학1` 이 같은 학기의
+    //   `… 공통수학2` 와 같은 시험으로 묶여 건너뛰어졌다(고1 공통수학1·2 는 한 학기에 두 장이 정상).
+    //   과목이 식별되면 키에 넣는다. 과목이 비면 종전처럼 학기 단위로 본다.
     const dupKey = cls.kind === 'school'
-      ? `${title.split(' ')[0]} ${cls.school}`
+      ? (() => {
+          const subjectLabel = normalizeSubjectLabel(cls.subject);
+          return `${title.split(' ')[0]} ${cls.school}${subjectLabel ? ` ${subjectLabel}` : ''}`;
+        })()
       : title;
     if (seenKeys.has(dupKey)) { skipped++; continue; }
 
