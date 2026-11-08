@@ -39,6 +39,10 @@ const PER_EXAM = Number(ARG('per-exam') || 0);
 const NEWEST = process.argv.includes('--newest'); // 제목 역순(최근 시험지부터)
 // 특정 시점 이후 만들어진 시험지만 (예: 일괄 적재 직후 그 묶음만 분류) — ISO 시각, exams.created_at >= 값
 const SINCE = ARG('since') || '';
+// 학교·연도 범위 지정 — `--school=해강고,신도고 --year-from=2023` (제목 `25-1-1-F 학교명 …` 의 학교 토큰, exams.exam_year)
+const SCHOOLS = (ARG('school') || '').split(',').map((s) => s.trim()).filter(Boolean);
+const YEAR_FROM = Number(ARG('year-from') || 0);
+const schoolOfTitle = (title: string) => title.match(/^\d{2}-\d-\d-[MF][\s-]+([^\s\-\[(]+)/)?.[1] ?? '';
 if (!RUN) { console.error('--run=<id> 필수'); process.exit(1); }
 
 for (const line of fs.readFileSync('.env.local', 'utf-8').split('\n')) {
@@ -94,8 +98,10 @@ async function select(): Promise<Target[]> {
     let q = db.from('exams').select('id,title,subject,grade,curriculum_codes').is('deleted_at', null).overlaps('curriculum_codes', SUBJECTS);
     if (EXAM_TYPE) q = q.eq('exam_type', EXAM_TYPE);
     if (SINCE) q = q.gte('created_at', SINCE);
+    if (YEAR_FROM) q = q.gte('exam_year', YEAR_FROM);
     return q.range(a, b);
   }))
+    .filter((e) => !SCHOOLS.length || SCHOOLS.includes(schoolOfTitle(e.title)))
     // 과목 코드가 전부 대상 과목 안에 있어야 한다 (중등+고등 섞인 시험지는 제외)
     .filter((e) => (e.curriculum_codes || []).length > 0 && (e.curriculum_codes || []).every((c) => SUBJECTS.includes(String(c))))
     .sort((a, b) => String(a.curriculum_codes).localeCompare(String(b.curriculum_codes)) || (NEWEST ? b.title.localeCompare(a.title) : a.title.localeCompare(b.title)));
