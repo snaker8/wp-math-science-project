@@ -352,7 +352,11 @@ function exportObsidian(targets: Target[]) {
   if (!schools.length) return;
   try {
     log(`옵시디언 기출 분석 갱신 → ${schools.join(', ')}`);
-    const out = execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', 'tsx', 'scripts/export-obsidian-exams.ts', `--school=${schools.join(',')}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 10 * 60 * 1000 });
+    // ★ Windows 에서 .cmd 를 직접 spawn 하면 EINVAL(Node 보안 변경) → shell 로 돌리고, 한글 학교명은 코드페이지를 타지 않게 환경변수로 넘긴다.
+    const out = execFileSync('npx --yes tsx scripts/export-obsidian-exams.ts', [], {
+      shell: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 10 * 60 * 1000,
+      env: { ...process.env, OBSIDIAN_EXPORT_SCHOOLS: schools.join(',') },
+    });
     log(out.trim().split('\n').slice(-2).join(' | '));
   } catch (e) { log(`옵시디언 갱신 실패(예약작업이 내일 다시 씁니다): ${String((e as Error).message).slice(0, 200)}`); }
 }
