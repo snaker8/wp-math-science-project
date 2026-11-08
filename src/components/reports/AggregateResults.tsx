@@ -568,7 +568,7 @@ function SchoolBreakdownPanel({ data }: { data: AggregateResponse }) {
                           className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300"
                         >
                           {u.level1Name}
-                          <span className="ml-1 text-zinc-500">{u.problemCount}</span>
+                          <span className="ml-1 text-zinc-500" title={`${u.problemCount}문항 / ${s.classifiedCount || s.examCount}장`}>{(u.problemCount / Math.max(1, s.classifiedCount || s.examCount)).toFixed(1)}/장</span>
                         </span>
                       ))}
                       {s.topUnits.length === 0 && <span className="text-[10px] text-zinc-500">-</span>}
