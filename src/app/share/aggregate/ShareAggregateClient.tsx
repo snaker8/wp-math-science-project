@@ -19,7 +19,15 @@ import '../exam/[token]/report.css';
 import './aggregate.css';
 
 // ─── 타입 ────────────────────────────────────────────────────────────────
-interface UnitRow { level1Code: string; level1Name: string; problemCount: number; examCount: number; schoolCount: number }
+interface SubUnitRow {
+  code: string; name: string; problemCount: number; examCount: number; schoolCount: number;
+  avgDifficulty: number | null; hardCount: number; bySchool: Record<string, number>; byExam: Record<string, number>;
+}
+interface UnitRow {
+  level1Code: string; level1Name: string; problemCount: number; examCount: number; schoolCount: number;
+  avgDifficulty?: number | null; hardCount?: number; children?: SubUnitRow[];
+}
+type SchoolAction = { kind: 'always' | 'hard' | 'unique'; text: string };
 interface ExamRow {
   id: string; title: string; school: string; year: number | null; semester: 1 | 2 | null; examType: string | null;
   problemCount: number; classifiedCount: number; avgDifficulty: number | null; hasAnalysis: boolean; shareToken: string | null;
@@ -31,7 +39,7 @@ interface AggregateResponse {
   matched: { schoolCount: number; examCount: number; analyzedExamCount: number; problemCount: number; classifiedProblemCount: number };
   unitFrequency: UnitRow[];
   difficultyDist: { examBandCounts: Array<{ band: string; hue: string; examCount: number }>; overallAvg: number | null; overallStdDev: number | null; examWithAvgCount: number };
-  schoolBreakdown: Array<{ school: string; examCount: number; problemCount: number; avgDifficulty: number | null; stdDevDifficulty: number | null; topUnits: Array<{ level1Name: string; problemCount: number }>; unitCounts?: Array<{ level1Name: string; problemCount: number }> }>;
+  schoolBreakdown: Array<{ school: string; examCount: number; problemCount: number; classifiedCount?: number; avgDifficulty: number | null; stdDevDifficulty: number | null; topUnits: Array<{ level1Name: string; problemCount: number }>; unitCounts?: Array<{ level1Name: string; problemCount: number }>; actions?: SchoolAction[] }>;
   exams: ExamRow[];
   pitfalls: Array<{ code: string; label: string; category: string | null; problemCount: number; examCount: number }>;
   unitSegmentation: { common: UnitRow[]; unique: UnitRow[] };
@@ -64,6 +72,10 @@ function examLabel(e: { title: string; year: number | null; semester: 1 | 2 | nu
   return parts.length ? parts.join(' ') : e.title;
 }
 function fmt2(n: number | null | undefined): string { return n == null ? '-' : n.toFixed(2); }
+/** 시험지 1장당 문항 수 — 수집량이 적은 학교가 「단원을 적게 내는 것처럼」 보이던 것을 비율로 바로잡는다 (2026-11-09) */
+function perExam(count: number, exams: number): string { return exams > 0 ? (count / exams).toFixed(1) : '-'; }
+/** 학교의 「장당」 분모 = 분류된 문항이 있는 시험지 수 (없으면 전체 시험지 수) */
+function schoolDen(s: { classifiedCount?: number; examCount: number }): number { return s.classifiedCount || s.examCount; }
 /** 받침 유무로 조사 선택 — 마지막 글자가 한글이 아니면 받침 없는 쪽 */
 function josa(word: string, withBatchim: string, without: string): string {
   const ch = word.charCodeAt(word.length - 1);
@@ -197,7 +209,7 @@ function ShareAggregateContent() {
               {single ? (
                 <>{kindLabel ? <><b>{kindLabel}</b> · </> : null}{yearRange ? <><b>{yearRange}</b> · </> : null}시험지 {m.examCount}장 · 문항 {m.problemCount}개</>
               ) : (
-                <>{filterChips.length ? <><b>{filterChips.join(' · ')}</b> · </> : null}학교 {m.schoolCount}곳 · 시험지 {m.examCount}장 · 문항 {m.problemCount}개</>
+                <>{filterChips.length ? <><b>{filterChips.join(' · ')}</b> · </> : null}{data.filters.schools?.length ? null : <>학교 {m.schoolCount}곳 · </>}시험지 {m.examCount}장 · 문항 {m.problemCount}개</>
               )}
             </div>
           </div>
@@ -359,7 +371,7 @@ function HeroMulti({ data }: { data: AggregateResponse }) {
     ? <>학교 {data.matched.schoolCount}곳의 시험지 {data.matched.examCount}장을 모았습니다.</>
     : (
       <>
-        학교 {data.matched.schoolCount}곳 가운데 <span className="accent">{hardest.school}</span>이 {fmt2(hardest.avgDifficulty)}로 가장 어렵고 <span className="accent">{easiest.school}</span>이 {fmt2(easiest.avgDifficulty)}로 가장 평이합니다.
+        학교 {data.matched.schoolCount}곳 가운데 <span className="accent">{hardest.school}</span>{josa(hardest.school, '이', '가')} {fmt2(hardest.avgDifficulty)}로 가장 어렵고 <span className="accent">{easiest.school}</span>{josa(easiest.school, '이', '가')} {fmt2(easiest.avgDifficulty)}로 가장 평이합니다.
         {common.length ? <> <span className="accent">{common.join('·')}</span>는 거의 모든 학교가 냅니다.</> : null}
       </>
     );
@@ -478,12 +490,17 @@ function SchoolCards({ data }: { data: AggregateResponse }) {
                 <Delta d={diff} />
               </div>
               <div>
-                <div className="ag-label">자주 출제 단원</div>
+                <div className="ag-label">자주 출제 단원 · 시험지 1장당 문항</div>
                 <div className="ag-units">
-                  {s.topUnits.slice(0, 3).map((u) => <span key={u.level1Name} className="ag-unit">{unique.has(u.level1Name) ? '★ ' : ''}{u.level1Name}<b>{u.problemCount}</b></span>)}
+                  {s.topUnits.slice(0, 3).map((u) => <span key={u.level1Name} className="ag-unit" title={`${u.problemCount}문항 / ${schoolDen(s)}장`}>{unique.has(u.level1Name) ? '★ ' : ''}{u.level1Name}<b>{perExam(u.problemCount, schoolDen(s))}</b></span>)}
                   {s.topUnits.length === 0 && <span className="ag-section-desc">단원 데이터 없음</span>}
                 </div>
               </div>
+              {(s.actions ?? []).length > 0 && (
+                <ul className="ag-actions-list">
+                  {(s.actions ?? []).map((a) => <li key={a.kind} data-kind={a.kind}>{a.text}</li>)}
+                </ul>
+              )}
               {s.stdDevDifficulty != null && <div className="ag-section-desc">시험지 간 편차 ±{s.stdDevDifficulty.toFixed(2)}</div>}
             </div>
           );
@@ -493,8 +510,12 @@ function SchoolCards({ data }: { data: AggregateResponse }) {
   );
 }
 
-// ─── 단원 출제 표 — 행 = 단원, 열 = 연도(학교 1곳) / 학교(여러 곳) ─────────
+// ─── 단원 출제 표 — 행 = 단원(누르면 소단원), 열 = 연도(학교 1곳) / 학교(여러 곳) ─────────
+// ★ 2026-11-09: 여러 학교일 때 셀은 「시험지 1장당 문항 수」. 수집량이 적은 학교가 단원을 적게 내는 것처럼 보이던 것을 바로잡는다.
+//   대단원만 보이면 「이차함수와 이차방정식 85」로 뭉뚱그려져 읽을 게 없다 → 행을 누르면 소단원(중단원 › 소단원)까지 펼친다.
+//   난이도 열 = 그 단원 문항 평균 · 7+ 문항 수 — 어느 단원에서 변별이 나는지.
 function UnitHeat({ data, single }: { data: AggregateResponse; single: boolean }) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const units = data.unitFrequency.slice(0, 10);
   if (units.length === 0) {
     return (
@@ -505,10 +526,11 @@ function UnitHeat({ data, single }: { data: AggregateResponse; single: boolean }
     );
   }
   // 열
-  const cols: Array<{ key: string; label: string; sub?: string }> = single
-    ? [...data.exams].sort((a, b) => (a.year ?? 0) - (b.year ?? 0) || (a.semester ?? 0) - (b.semester ?? 0)).map((e) => ({ key: e.id, label: e.year ? `${e.year}` : e.title.slice(0, 8), sub: examLabel(e, false) }))
-    : [...data.schoolBreakdown].sort((a, b) => b.problemCount - a.problemCount).slice(0, 8).map((s) => ({ key: s.school, label: s.school }));
-  // 셀 값 — unitCounts(전체)가 있으면 정확한 수, 없으면(옛 응답) topUnits 로만 채우고 나머지는 '·'
+  const cols: Array<{ key: string; label: string; sub?: string; den: number }> = single
+    ? [...data.exams].sort((a, b) => (a.year ?? 0) - (b.year ?? 0) || (a.semester ?? 0) - (b.semester ?? 0)).map((e) => ({ key: e.id, label: e.year ? `${e.year}` : e.title.slice(0, 8), sub: examLabel(e, false), den: 1 }))
+    : [...data.schoolBreakdown].sort((a, b) => b.problemCount - a.problemCount).slice(0, 8).map((s) => ({ key: s.school, label: s.school, sub: `${schoolDen(s)}장`, den: schoolDen(s) }));
+  const totalDen = single ? 1 : Math.max(1, data.difficultyDist.examWithAvgCount || data.matched.examCount);
+  // 셀 값(원문항 수) — unitCounts(전체)가 있으면 정확한 수, 없으면(옛 응답) topUnits 로만 채우고 나머지는 '·'
   const cell = (unitName: string, col: { key: string }): number | null => {
     const src = single
       ? data.exams.find((x) => x.id === col.key)
@@ -518,12 +540,24 @@ function UnitHeat({ data, single }: { data: AggregateResponse; single: boolean }
     const hit = (src.topUnits ?? []).find((u) => u.level1Name === unitName);
     return hit ? hit.problemCount : null;
   };
-  const max = Math.max(1, ...units.map((u) => u.problemCount));
+  const subCell = (su: SubUnitRow, col: { key: string }): number => (single ? su.byExam?.[col.key] : su.bySchool?.[col.key]) ?? 0;
+  const show = (v: number | null, den: number): string => (v == null ? '·' : single ? String(v) : (v / den).toFixed(1));
+  // 진하기 = 장당 비율 기준 (표 전체 최대 대비)
+  const maxRatio = Math.max(0.1, ...units.flatMap((u) => cols.map((c) => { const v = cell(u.level1Name, c); return v ? v / c.den : 0; })));
+  const heat = (v: number | null, den: number) => {
+    if (!v) return undefined;
+    const alpha = 0.12 + 0.55 * Math.min(1, v / den / maxRatio);
+    return { background: `color-mix(in srgb, var(--rp-accent) ${Math.round(alpha * 100)}%, var(--rp-paper))` };
+  };
+  const diffCell = (avg: number | null | undefined, hard: number | undefined) => (
+    avg == null ? <span className="zero">·</span> : <><b style={{ color: diffColor(avg) }}>{avg.toFixed(1)}</b>{hard ? <small> · 7+ {hard}</small> : null}</>
+  );
+  const nCols = cols.length + 3;
   return (
     <section className="ag-section">
       <div className="ag-section-head">
         <h2 className="ag-section-title"><Grid3X3 className="h-4 w-4" />단원 출제 표</h2>
-        <span className="ag-section-desc">{single ? '어느 해에 어떤 단원이 몇 문항 나왔는지' : '어느 학교가 어떤 단원을 몇 문항 내는지'}</span>
+        <span className="ag-section-desc">{single ? '어느 해에 어떤 단원이 몇 문항 나왔는지 · 단원을 누르면 소단원까지' : '어느 학교가 어떤 단원을 시험지 1장당 몇 문항 내는지 · 단원을 누르면 소단원까지'}</span>
       </div>
       <div className="ag-heat-wrap">
         <table className="ag-heat">
@@ -531,33 +565,61 @@ function UnitHeat({ data, single }: { data: AggregateResponse; single: boolean }
             <tr>
               <th>단원</th>
               {cols.map((c) => <th key={c.key}>{c.label}{c.sub ? <><br /><span style={{ fontWeight: 400 }}>{c.sub}</span></> : null}</th>)}
-              <th>합계</th>
+              <th>{single ? '합계' : '전체 장당'}</th>
+              <th>난이도</th>
             </tr>
           </thead>
           <tbody>
-            {units.map((u) => (
-              <tr key={u.level1Code}>
-                <td className="u">{u.level1Name}<small>{single ? `${u.examCount}/${data.exams.length}회 출제` : `${u.schoolCount}/${data.matched.schoolCount}곳 출제`}</small></td>
-                {cols.map((c) => {
-                  const v = cell(u.level1Name, c);
-                  const alpha = v == null || v === 0 ? 0 : 0.12 + 0.55 * Math.min(1, v / Math.max(1, max / Math.max(1, cols.length)));
-                  return (
-                    <td key={c.key}>
-                      <span className={`cell${!v ? ' zero' : ''}`} style={{ background: v ? `color-mix(in srgb, var(--rp-accent) ${Math.round(alpha * 100)}%, var(--rp-paper))` : undefined }}>
-                        {v == null ? '·' : v}
-                      </span>
+            {units.map((u) => {
+              const kids = (u.children ?? []).slice(0, 10);
+              const isOpen = !!open[u.level1Code];
+              return (
+                <React.Fragment key={u.level1Code}>
+                  <tr className={`parent${kids.length ? ' has-kids' : ''}`} onClick={() => kids.length && setOpen((o) => ({ ...o, [u.level1Code]: !o[u.level1Code] }))} aria-expanded={kids.length ? isOpen : undefined}>
+                    <td className="u">
+                      <span className="caret">{kids.length ? (isOpen ? '▾' : '▸') : ''}</span>{u.level1Name}
+                      <small>{single ? `${u.examCount}/${data.exams.length}회 출제` : `${u.schoolCount}/${data.matched.schoolCount}곳 출제`}{kids.length ? ` · 소단원 ${u.children!.length}` : ''}</small>
                     </td>
-                  );
-                })}
-                <td className="t">{u.problemCount}</td>
-              </tr>
-            ))}
+                    {cols.map((c) => {
+                      const v = cell(u.level1Name, c);
+                      return (
+                        <td key={c.key}>
+                          <span className={`cell${!v ? ' zero' : ''}`} style={heat(v, c.den)} title={v != null && !single ? `${v}문항 / ${c.den}장` : undefined}>{show(v, c.den)}</span>
+                        </td>
+                      );
+                    })}
+                    <td className="t" title={single ? undefined : `${u.problemCount}문항 / ${totalDen}장`}>{show(u.problemCount, totalDen)}</td>
+                    <td className="d">{diffCell(u.avgDifficulty, u.hardCount)}</td>
+                  </tr>
+                  {isOpen && kids.map((su) => (
+                    <tr key={su.code} className="sub">
+                      <td className="u">{su.name}<small>{single ? `${su.examCount}/${data.exams.length}회` : `${su.schoolCount}/${data.matched.schoolCount}곳`}</small></td>
+                      {cols.map((c) => {
+                        const v = subCell(su, c);
+                        return (
+                          <td key={c.key}>
+                            <span className={`cell${!v ? ' zero' : ''}`} style={heat(v, c.den)} title={!single ? `${v}문항 / ${c.den}장` : undefined}>{show(v, c.den)}</span>
+                          </td>
+                        );
+                      })}
+                      <td className="t">{show(su.problemCount, totalDen)}</td>
+                      <td className="d">{diffCell(su.avgDifficulty, su.hardCount)}</td>
+                    </tr>
+                  ))}
+                  {isOpen && (u.children?.length ?? 0) > kids.length && (
+                    <tr className="sub more"><td className="u" colSpan={nCols}><small>소단원 {u.children!.length - kids.length}개 더 있음 (문항 수 적은 순으로 생략)</small></td></tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
       <div className="ag-heat-legend">
+        {!single && <span>숫자 = 시험지 1장당 평균 문항 수 (원문항 수는 셀에 마우스를 올리면)</span>}
         <span>진할수록 많이 출제</span>
         <span>· = 자료 없음</span>
+        <span>난이도 = 그 단원 문항 평균(1~10), 7+ = 변별 문항 수</span>
         {units.length < data.unitFrequency.length && <span>상위 {units.length}개 단원만 표시</span>}
       </div>
     </section>

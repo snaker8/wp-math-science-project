@@ -40,24 +40,47 @@ async function orgSlugOfInstitute(instituteId: string | null | undefined): Promi
   } catch { return null; }
 }
 
+/** 소단원(수학비서 4단계) 한 줄 — 대단원 아래 펼쳐 보는 상세 (2026-11-09) */
+interface SubUnitRow {
+  code: string;
+  /** 「중단원 › 소단원」 */
+  name: string;
+  problemCount: number;
+  examCount: number;
+  schoolCount: number;
+  avgDifficulty: number | null;
+  /** 난이도 7 이상 문항 수 */
+  hardCount: number;
+  /** 학교별 문항 수 */
+  bySchool: Record<string, number>;
+  /** 시험지별 문항 수 (학교 1곳 리포트의 연도 열용) */
+  byExam: Record<string, number>;
+}
+
 interface UnitRow {
   level1Code: string;
   level1Name: string;
   problemCount: number;
   examCount: number;
   schoolCount: number;
+  avgDifficulty: number | null;
+  hardCount: number;
+  children: SubUnitRow[];
 }
 
 interface SchoolRow {
   school: string;
   examCount: number;
   problemCount: number;
+  /** 분류된 문항이 1개 이상인 시험지 수 = 「장당」 비율의 분모 */
   classifiedCount: number;
   avgDifficulty: number | null;
   stdDevDifficulty: number | null;
   topUnits: Array<{ level1Name: string; problemCount: number }>;
   /** 학교의 단원별 문항 수 전체 (단원 출제 표용, 2026-11-07) */
   unitCounts: Array<{ level1Name: string; problemCount: number }>;
+  /** 숫자에서 바로 읽히는 「그래서」 — 규칙 기반 2~3줄 (2026-11-09) */
+  actions: Array<{ kind: 'always' | 'hard' | 'unique'; text: string }>;
 }
 
 interface PitfallRow {
@@ -252,14 +275,18 @@ export async function GET(request: NextRequest) {
   // ─────────────────────────────────────────────────────────────────────
   // 3) mathsecr_types 한 번 조회 — level1 매핑용
   // ─────────────────────────────────────────────────────────────────────
+  // depth 2 = 대단원, depth 4 = 소단원(중단원 이름 포함) — 둘 다 한 번에 (2026-11-09 소단원 펼침)
   const { data: mathsecrRaw } = await supabaseAdmin
     .from('mathsecr_types')
-    .select('code, level1_name')
-    .eq('depth', 2);
+    .select('code, depth, level1_name, level2_name, level3_name')
+    .in('depth', [2, 4]);
 
   const level1NameMap = new Map<string, string>();
-  ((mathsecrRaw || []) as Array<{ code: string; level1_name: string | null }>).forEach((r) => {
-    if (r.code && r.level1_name) level1NameMap.set(r.code, r.level1_name);
+  const subUnitNameMap = new Map<string, string>(); // 4세그먼트 코드 → 「중단원 › 소단원」
+  ((mathsecrRaw || []) as Array<{ code: string; depth: number; level1_name: string | null; level2_name: string | null; level3_name: string | null }>).forEach((r) => {
+    if (!r.code) return;
+    if (r.depth === 2 && r.level1_name) level1NameMap.set(r.code, r.level1_name);
+    if (r.depth === 4) subUnitNameMap.set(r.code, [r.level2_name, r.level3_name].filter(Boolean).join(' › ') || r.code);
   });
 
   // ─────────────────────────────────────────────────────────────────────
@@ -280,7 +307,12 @@ export async function GET(request: NextRequest) {
   // 단원 빈도
   const unitMap = new Map<
     string,
-    { level1Code: string; level1Name: string; problemCount: number; examIds: Set<string>; schools: Set<string> }
+    { level1Code: string; level1Name: string; problemCount: number; examIds: Set<string>; schools: Set<string>; diffs: number[] }
+  >();
+  // 소단원(4세그먼트) 빈도 — 대단원 아래 펼침용
+  const subUnitMap = new Map<
+    string,
+    { code: string; parent: string; name: string; problemCount: number; examIds: Set<string>; schools: Set<string>; diffs: number[]; bySchool: Map<string, number>; byExam: Map<string, number>; examsBySchool: Map<string, Set<string>>; hardBySchool: Map<string, number> }
   >();
   // 학교별 통계 — 시험지 평균을 모아서 학교 평균 = 시험지 평균들의 평균 (등가중)
   const schoolMap = new Map<
@@ -359,12 +391,46 @@ export async function GET(request: NextRequest) {
               problemCount: 0,
               examIds: new Set(),
               schools: new Set(),
+              diffs: [],
             });
           }
           const u = unitMap.get(level1Code)!;
           u.problemCount++;
           u.examIds.add(e.id);
           u.schools.add(school);
+          if (Number.isFinite(d) && d >= 1 && d <= 10) u.diffs.push(d);
+
+          // 소단원(4세그먼트) — 코드가 3세그먼트에서 끝나면 중단원까지만
+          if (segs.length >= 3) {
+            const subCode = segs.slice(0, Math.min(4, segs.length)).join('-');
+            if (!subUnitMap.has(subCode)) {
+              subUnitMap.set(subCode, {
+                code: subCode,
+                parent: level1Code,
+                name: subUnitNameMap.get(subCode) || subCode,
+                problemCount: 0,
+                examIds: new Set(),
+                schools: new Set(),
+                diffs: [],
+                bySchool: new Map(),
+                byExam: new Map(),
+                examsBySchool: new Map(),
+                hardBySchool: new Map(),
+              });
+            }
+            const su = subUnitMap.get(subCode)!;
+            su.problemCount++;
+            su.examIds.add(e.id);
+            su.schools.add(school);
+            if (Number.isFinite(d) && d >= 1 && d <= 10) {
+              su.diffs.push(d);
+              if (d >= 7) su.hardBySchool.set(school, (su.hardBySchool.get(school) || 0) + 1);
+            }
+            su.bySchool.set(school, (su.bySchool.get(school) || 0) + 1);
+            su.byExam.set(e.id, (su.byExam.get(e.id) || 0) + 1);
+            if (!su.examsBySchool.has(school)) su.examsBySchool.set(school, new Set());
+            su.examsBySchool.get(school)!.add(e.id);
+          }
 
           sStat.unitCounts.set(level1Name, (sStat.unitCounts.get(level1Name) || 0) + 1);
           examUnitCounts.set(level1Name, (examUnitCounts.get(level1Name) || 0) + 1);
@@ -442,6 +508,22 @@ export async function GET(request: NextRequest) {
   };
 
   // 단원 빈도 정렬 — problemCount 내림차순
+  const avgOf = (arr: number[]): number | null => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
+  const hardOf = (arr: number[]): number => arr.filter((v) => v >= 7).length;
+  const subUnitRows: Array<SubUnitRow & { _parent: string }> = Array.from(subUnitMap.values())
+    .map((su) => ({
+      code: su.code,
+      name: su.name,
+      problemCount: su.problemCount,
+      examCount: su.examIds.size,
+      schoolCount: su.schools.size,
+      avgDifficulty: avgOf(su.diffs),
+      hardCount: hardOf(su.diffs),
+      bySchool: Object.fromEntries(su.bySchool),
+      byExam: Object.fromEntries(su.byExam),
+      _parent: su.parent,
+    }))
+    .sort((a, b) => b.problemCount - a.problemCount);
   const unitFrequency: UnitRow[] = Array.from(unitMap.values())
     .map((u) => ({
       level1Code: u.level1Code,
@@ -449,6 +531,11 @@ export async function GET(request: NextRequest) {
       problemCount: u.problemCount,
       examCount: u.examIds.size,
       schoolCount: u.schools.size,
+      avgDifficulty: avgOf(u.diffs),
+      hardCount: hardOf(u.diffs),
+      children: subUnitRows
+        .filter((s) => s._parent === u.level1Code)
+        .map(({ _parent: _p, ...rest }) => rest),
     }))
     .sort((a, b) => b.problemCount - a.problemCount);
 
@@ -470,6 +557,7 @@ export async function GET(request: NextRequest) {
         stdDevDifficulty: std,
         topUnits,
         unitCounts,
+        actions: [],
       };
     })
     .sort((a, b) => a.school.localeCompare(b.school));
@@ -506,6 +594,38 @@ export async function GET(request: NextRequest) {
       const ratio = u.schoolCount / totalSchools;
       if (ratio >= 0.8) unitCommon.push(u);
       else if (ratio <= 0.3 && u.schoolCount >= 1) unitUnique.push(u);
+    }
+  }
+
+  // ★ 학교별 「그래서」 — 소단원 단위로 ① 매 시험 나오는 것 ② 변별(7+) 문항이 몰리는 것 ③ 그 학교만 내는 대단원 (2026-11-09)
+  for (const s of schoolBreakdown) {
+    const nExams = s.classifiedCount;
+    if (nExams === 0) continue;
+    const mine = Array.from(subUnitMap.values()).filter((su) => (su.bySchool.get(s.school) || 0) > 0);
+    const always = mine
+      .filter((su) => nExams >= 2 && (su.examsBySchool.get(s.school)?.size || 0) >= Math.max(2, Math.ceil(nExams * 0.8)))
+      .sort((a, b) => (b.bySchool.get(s.school) || 0) - (a.bySchool.get(s.school) || 0))
+      .slice(0, 3);
+    if (always.length) {
+      s.actions.push({
+        kind: 'always',
+        text: `거의 매 시험 나옴: ${always.map((su) => `${su.name} ${((su.bySchool.get(s.school) || 0) / nExams).toFixed(1)}문항/장`).join(' · ')}`,
+      });
+    }
+    const hard = mine
+      .map((su) => ({ su, h: su.hardBySchool.get(s.school) || 0, n: su.bySchool.get(s.school) || 0 }))
+      .filter((x) => x.h >= 2 || (x.h >= 1 && x.n >= 2 && x.h / x.n >= 0.5))
+      .sort((a, b) => b.h - a.h)
+      .slice(0, 3);
+    if (hard.length) {
+      s.actions.push({
+        kind: 'hard',
+        text: `변별 문항(난이도 7+)이 몰리는 곳: ${hard.map((x) => `${x.su.name} ${x.h}/${x.n}`).join(' · ')}`,
+      });
+    }
+    const uniq = unitUnique.filter((u) => s.unitCounts.some((c) => c.level1Name === u.level1Name && c.problemCount >= 2)).slice(0, 3);
+    if (uniq.length) {
+      s.actions.push({ kind: 'unique', text: `이 학교 특화 단원: ${uniq.map((u) => u.level1Name).join(' · ')}` });
     }
   }
 

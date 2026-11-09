@@ -175,3 +175,20 @@
   .ag-section, .ag-card, .ag-narr, .ag-heat-wrap { break-inside: avoid; }
   .ag-link { display: none; }
 }
+
+/* ── 단원 출제 표 — 소단원 펼침·난이도 열 (2026-11-09) ── */
+.ag-heat tr.parent.has-kids td.u { cursor: pointer; }
+.ag-heat tr.parent.has-kids:hover td.u { color: var(--rp-accent-strong); }
+.ag-heat .caret { display: inline-block; width: 14px; color: var(--rp-text-4); font-size: 11px; }
+.ag-heat tr.sub td.u { padding-left: 30px; font-weight: 500; font-size: 12px; color: var(--rp-text-2); white-space: normal; min-width: 180px; }
+.ag-heat tr.sub td.u small { display: inline; margin-left: 6px; }
+.ag-heat tr.sub .cell { padding: 5px 0; font-size: 12px; margin: 2px 6px; }
+.ag-heat tr.sub td.t { font-weight: 600; font-size: 12px; }
+.ag-heat tr.sub.more td.u { padding: 6px 10px 8px 30px; }
+.ag-heat td.d { white-space: nowrap; font-size: 12px; color: var(--rp-text-3); padding: 9px 12px; }
+.ag-heat td.d b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ag-heat td.d small { font-size: 10.5px; color: var(--rp-text-4); }
+.ag-heat td.d .zero { color: var(--rp-text-4); }
+.ag-actions-list { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; line-height: 1.5; color: var(--rp-text-2); }
+.ag-actions-list li { position: relative; padding-left: 14px; }
+.ag-actions-list li::before { content: '›'; position: absolute; left: 2px; top: 0; font-weight: 700; color: var(--rp-accent); }
