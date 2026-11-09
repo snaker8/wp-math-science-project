@@ -275,18 +275,16 @@ export async function GET(request: NextRequest) {
   // ─────────────────────────────────────────────────────────────────────
   // 3) mathsecr_types 한 번 조회 — level1 매핑용
   // ─────────────────────────────────────────────────────────────────────
-  // depth 2 = 대단원, depth 4 = 소단원(중단원 이름 포함) — 둘 다 한 번에 (2026-11-09 소단원 펼침)
+  // ★ depth 2(대단원)만 여기서. 소단원(depth 4) 이름은 집계 뒤 「쓰인 코드만」 chunk 로 조회한다 —
+  //   depth 2+4 를 한 번에 가져오면 Supabase 1,000행 제한에 잘려 대단원 이름이 코드로 나오는 회귀가 있었다 (2026-11-09, 운영 실측)
   const { data: mathsecrRaw } = await supabaseAdmin
     .from('mathsecr_types')
-    .select('code, depth, level1_name, level2_name, level3_name')
-    .in('depth', [2, 4]);
+    .select('code, level1_name')
+    .eq('depth', 2);
 
   const level1NameMap = new Map<string, string>();
-  const subUnitNameMap = new Map<string, string>(); // 4세그먼트 코드 → 「중단원 › 소단원」
-  ((mathsecrRaw || []) as Array<{ code: string; depth: number; level1_name: string | null; level2_name: string | null; level3_name: string | null }>).forEach((r) => {
-    if (!r.code) return;
-    if (r.depth === 2 && r.level1_name) level1NameMap.set(r.code, r.level1_name);
-    if (r.depth === 4) subUnitNameMap.set(r.code, [r.level2_name, r.level3_name].filter(Boolean).join(' › ') || r.code);
+  ((mathsecrRaw || []) as Array<{ code: string; level1_name: string | null }>).forEach((r) => {
+    if (r.code && r.level1_name) level1NameMap.set(r.code, r.level1_name);
   });
 
   // ─────────────────────────────────────────────────────────────────────
@@ -407,7 +405,7 @@ export async function GET(request: NextRequest) {
               subUnitMap.set(subCode, {
                 code: subCode,
                 parent: level1Code,
-                name: subUnitNameMap.get(subCode) || subCode,
+                name: subCode, // 집계 뒤 mathsecr_types 에서 이름으로 바꾼다
                 problemCount: 0,
                 examIds: new Set(),
                 schools: new Set(),
@@ -508,6 +506,21 @@ export async function GET(request: NextRequest) {
   };
 
   // 단원 빈도 정렬 — problemCount 내림차순
+  // 소단원 이름 — 실제 쓰인 코드만 200개씩 조회 (1,000행 제한 회피)
+  {
+    const codes = Array.from(subUnitMap.keys());
+    for (let i = 0; i < codes.length; i += 200) {
+      const { data: rows } = await supabaseAdmin
+        .from('mathsecr_types')
+        .select('code, level2_name, level3_name')
+        .in('code', codes.slice(i, i + 200));
+      ((rows || []) as Array<{ code: string; level2_name: string | null; level3_name: string | null }>).forEach((r) => {
+        const su = subUnitMap.get(r.code);
+        if (su) su.name = [r.level2_name, r.level3_name].filter(Boolean).join(' › ') || r.code;
+      });
+    }
+  }
+
   const avgOf = (arr: number[]): number | null => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
   const hardOf = (arr: number[]): number => arr.filter((v) => v >= 7).length;
   const subUnitRows: Array<SubUnitRow & { _parent: string }> = Array.from(subUnitMap.values())
