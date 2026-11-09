@@ -312,6 +312,8 @@ export async function GET(request: NextRequest) {
     string,
     { code: string; parent: string; name: string; problemCount: number; examIds: Set<string>; schools: Set<string>; diffs: number[]; bySchool: Map<string, number>; byExam: Map<string, number>; examsBySchool: Map<string, Set<string>>; hardBySchool: Map<string, number> }
   >();
+  // 학교 × 과목(MSxx) → 분류 문항이 있는 시험지 집합 — 「거의 매 시험」의 분모 (공통수학1 소단원을 공통수학2 시험지로 나누지 않게)
+  const subjectExamsBySchool = new Map<string, Map<string, Set<string>>>();
   // 학교별 통계 — 시험지 평균을 모아서 학교 평균 = 시험지 평균들의 평균 (등가중)
   const schoolMap = new Map<
     string,
@@ -428,6 +430,10 @@ export async function GET(request: NextRequest) {
             su.byExam.set(e.id, (su.byExam.get(e.id) || 0) + 1);
             if (!su.examsBySchool.has(school)) su.examsBySchool.set(school, new Set());
             su.examsBySchool.get(school)!.add(e.id);
+            if (!subjectExamsBySchool.has(school)) subjectExamsBySchool.set(school, new Map());
+            const bySubj = subjectExamsBySchool.get(school)!;
+            if (!bySubj.has(segs[0])) bySubj.set(segs[0], new Set());
+            bySubj.get(segs[0])!.add(e.id);
           }
 
           sStat.unitCounts.set(level1Name, (sStat.unitCounts.get(level1Name) || 0) + 1);
@@ -615,19 +621,21 @@ export async function GET(request: NextRequest) {
     const nExams = s.classifiedCount;
     if (nExams === 0) continue;
     const mine = Array.from(subUnitMap.values()).filter((su) => (su.bySchool.get(s.school) || 0) > 0);
+    // 분모 = 그 소단원의 과목(MSxx) 시험지 수. 공통수학1 소단원이 공통수학2·대수 시험지 때문에 「가끔 나옴」이 되지 않게.
+    const subjExams = (su: { code: string }): number => subjectExamsBySchool.get(s.school)?.get(su.code.split('-')[0])?.size || 0;
     const always = mine
-      .filter((su) => nExams >= 2 && (su.examsBySchool.get(s.school)?.size || 0) >= Math.max(2, Math.ceil(nExams * 0.8)))
-      .sort((a, b) => (b.bySchool.get(s.school) || 0) - (a.bySchool.get(s.school) || 0))
+      .filter((su) => { const n = subjExams(su); return n >= 2 && (su.examsBySchool.get(s.school)?.size || 0) >= Math.max(2, Math.ceil(n * 0.8)); })
+      .sort((a, b) => (b.bySchool.get(s.school) || 0) / Math.max(1, subjExams(b)) - (a.bySchool.get(s.school) || 0) / Math.max(1, subjExams(a)))
       .slice(0, 3);
     if (always.length) {
       s.actions.push({
         kind: 'always',
-        text: `거의 매 시험 나옴: ${always.map((su) => `${su.name} ${((su.bySchool.get(s.school) || 0) / nExams).toFixed(1)}문항/장`).join(' · ')}`,
+        text: `거의 매 시험 나옴: ${always.map((su) => `${su.name} ${((su.bySchool.get(s.school) || 0) / Math.max(1, subjExams(su))).toFixed(1)}문항/장 (${su.examsBySchool.get(s.school)?.size || 0}/${subjExams(su)}장)`).join(' · ')}`,
       });
     }
     const hard = mine
       .map((su) => ({ su, h: su.hardBySchool.get(s.school) || 0, n: su.bySchool.get(s.school) || 0 }))
-      .filter((x) => x.h >= 2 || (x.h >= 1 && x.n >= 2 && x.h / x.n >= 0.5))
+      .filter((x) => x.h >= 2) // 1/2 같은 약한 근거는 쓰지 않는다 — 7+ 가 2문항 이상 몰린 곳만
       .sort((a, b) => b.h - a.h)
       .slice(0, 3);
     if (hard.length) {
