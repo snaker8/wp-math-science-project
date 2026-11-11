@@ -93,6 +93,7 @@ function ExamProblemRendererInner({
   numberOnTop = false,
   numberStyle = 'plain',
   showLevel = false,
+  sourceText = null,
 }: {
   problem: ExamRenderProblem;
   gap?: number;
@@ -105,6 +106,8 @@ function ExamProblemRendererInner({
   numberStyle?: 'plain' | 'pad';
   /** ★ 난이도 텍스트 배지 — 매쓰홀릭 「난이도 표시: 텍스트」(11-print-api §5). 우리 분류 밴드 그대로 */
   showLevel?: boolean;
+  /** ★ 출처 한 줄 — 「상산고 2021 고1-1 기말 수학상 14번」. 번호 줄 오른쪽에 작게(수학비서 「출처 노출」). null 이면 안 그림 */
+  sourceText?: string | null;
 }) {
   // 도형 소스 준비
   const figureCrops = problem.images?.filter(img => img.type === 'figure_crop') || [];
@@ -536,6 +539,16 @@ function ExamProblemRendererInner({
     </span>
   ) : null;
 
+  // ★ 출처 — 번호 줄 오른쪽 끝, 작은 회색. 길면 그 자리에서 줄바꿈(본문 폭은 그대로)
+  const sourceEl = sourceText ? (
+    <span
+      className="exam-source-line"
+      style={{ marginLeft: 'auto', paddingLeft: '8px', fontSize: '10.5px', lineHeight: 1.3, color: '#8a93a0', fontWeight: 400, textAlign: 'right', letterSpacing: 0 }}
+    >
+      {sourceText}
+    </span>
+  ) : null;
+
   // ★ 「01」 — 매쓰홀릭 시험지 실측(09-21 캡처): 두 자리, 큰 연회색, 점 없음, 배지가 바로 옆.
   const padNumber = numberStyle === 'pad' ? (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, marginBottom: '4px', lineHeight: 1 }}>
@@ -543,6 +556,7 @@ function ExamProblemRendererInner({
         {String(problem.number ?? '').padStart(2, '0')}
       </span>
       {levelBadge}
+      {sourceEl}
     </div>
   ) : null;
 
@@ -551,8 +565,9 @@ function ExamProblemRendererInner({
     return (
       <div>
         {padNumber ?? (
-          <div className="font-bold text-gray-500" style={{ fontSize: `calc(${textSize} + 6px)`, lineHeight: 1.2, marginBottom: '3px' }}>
-            {problem.number}.{levelBadge}
+          <div className="font-bold text-gray-500" style={{ display: 'flex', alignItems: 'baseline', fontSize: `calc(${textSize} + 6px)`, lineHeight: 1.2, marginBottom: '3px' }}>
+            <span>{problem.number}.{levelBadge}</span>
+            {sourceEl}
           </div>
         )}
         {bodyEl}
@@ -567,6 +582,7 @@ function ExamProblemRendererInner({
         {problem.number}.{levelBadge}
       </span>
       <div className="flex-1 min-w-0">
+        {sourceEl && <div style={{ display: 'flex', marginBottom: '2px' }}>{sourceEl}</div>}
         {bodyEl}
       </div>
     </div>
@@ -582,6 +598,7 @@ export const ExamProblemRenderer = memo(ExamProblemRendererInner, (prev, next) =
     prev.numberOnTop === next.numberOnTop &&
     prev.numberStyle === next.numberStyle &&
     prev.maxFigureWidth === next.maxFigureWidth &&
-    prev.showLevel === next.showLevel
+    prev.showLevel === next.showLevel &&
+    prev.sourceText === next.sourceText
   );
 });

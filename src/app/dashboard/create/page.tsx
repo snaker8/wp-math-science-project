@@ -1458,6 +1458,8 @@ export default function PaperCreatePage() {
     figureData: p.figureData,
     upscaledCropUrl: p.upscaledCropUrl,
     figureSource: p.figureSource,
+    originLabel: p.originLabel,
+    originKind: p.originKind,
   })), [generatedDbProblems]);
 
   // ---- Computed ----

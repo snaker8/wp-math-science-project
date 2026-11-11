@@ -44,6 +44,9 @@ export interface ExamProblemData {
   upscaledCropUrl?: string;
   /** 도형 소스: 'upscaled_crop' = 업스케일 원본 사용, 'ai_generated' 등 */
   figureSource?: 'upscaled_crop' | 'ai_generated' | 'ai_image';
+  /** ★ 출처 — 「상산고 2021 고1-1 기말 수학상 14번」. 유사·출제·진단 시험지에서 온 문항은 null */
+  originLabel?: string | null;
+  originKind?: 'school' | 'mock' | 'textbook' | null;
 }
 
 export interface ExamInfo {
@@ -371,6 +374,9 @@ export function toExamProblemData(
     figureData,
     upscaledCropUrl,
     figureSource,
+    // ★ 출처(원래 시험지 + 원래 번호) — GET /api/exams/[examId] 가 채운다. 인쇄 「출처」 옵션에서만 쓴다
+    originLabel: problem.origin?.label || null,
+    originKind: problem.origin?.kind || null,
   };
 }
 
