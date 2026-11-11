@@ -14,6 +14,8 @@ import { generateHWPX, type HwpxProblem } from '@/lib/export/hwpx-generator';
 import { rasterizeSvg } from '@/lib/vision/svg-raster';
 import { stripTrailingInlineChoices } from '@/lib/utils/strip-inline-choices';
 import { createHash } from 'node:crypto';
+import { loadOrigins } from '@/lib/exam/load-origins';
+import type { OriginInfo } from '@/lib/exam/origin-label';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -204,6 +206,16 @@ export async function GET(
   const pMap = new Map<string, ProbRow>();
   ((problems || []) as ProbRow[]).forEach((p) => pMap.set(p.id, p));
 
+  // ★ 출처 — 화면 「출처」 옵션에서 고른 종류만 (예: source=school,mock). 본문 첫 줄에 「〔상산고 … 14번〕」
+  const sourceKinds = new Set((searchParams.get('source') || '').split(',').filter((k) => k === 'school' || k === 'mock' || k === 'textbook'));
+  const originMap = sourceKinds.size > 0
+    ? await loadOrigins(sb, problemIds, examId, authed.data.scope)
+    : new Map<string, OriginInfo>();
+  const sourcePrefix = (problemId: string) => {
+    const o = originMap.get(problemId);
+    return o && sourceKinds.has(o.kind) ? `〔${o.label}〕\n` : '';
+  };
+
   // HwpxProblem[] 매핑
   const hwpProblems: HwpxProblem[] = await Promise.all(((epRows || []) as Array<{ sequence_number: number; problem_id: string; points: number | null }>)
     .map(async (row) => {
@@ -213,7 +225,7 @@ export async function GET(
       return {
         number: row.sequence_number,
         // ★ 본문 끝 인라인 보기(①…⑤) 가 choices 와 같으면 제거 — 화면과 같은 안전망. 잘려 나간 꼬리에 그림 자리가 있었으면 되살린다.
-        content: await resolveFigureContent(stripInlineChoicesKeepFigures(p?.content_latex || '', choices), p?.images, p?.ai_analysis, row.problem_id),
+        content: sourcePrefix(row.problem_id) + await resolveFigureContent(stripInlineChoicesKeepFigures(p?.content_latex || '', choices), p?.images, p?.ai_analysis, row.problem_id),
         choices,
         answer: plainAnswer(aj, choices),
         solution: withSolutions ? (p?.solution_latex ? fixOddDollar(p.solution_latex) : undefined) : undefined,

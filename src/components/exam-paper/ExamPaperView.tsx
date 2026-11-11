@@ -75,6 +75,9 @@ export interface ProblemData {
   upscaledCropUrl?: string;
   /** 도형 소스 타입 */
   figureSource?: 'upscaled_crop' | 'ai_generated' | 'ai_image';
+  /** ★ 출처 — 「상산고 2021 고1-1 기말 수학상 14번」 (인쇄 「출처」 옵션) */
+  originLabel?: string | null;
+  originKind?: 'school' | 'mock' | 'textbook' | null;
 }
 
 // ★ 인쇄 상하 여백 — 시중 시험지 표준 ~20mm(76px @96dpi). 모듈 레벨이라 ExamPaperView·
@@ -246,6 +249,13 @@ export function ExamPaperView({
   const [footerAuthor, setFooterAuthor] = useState(false);
   const [footerId, setFooterId] = useState(false);
   const [duplex, setDuplex] = useState(false);
+  // ★ 출처 표시 (2026-11-11 대표 「출제할 때 골라서 · 필요에 따라 · 수학비서도 체크하는 게 있다」) — 수학비서 「출처 노출」.
+  //   기본 꺼짐(종전 출력 불변). 켜면 종류(학교기출·모의고사·시중교재)별로 고른다 — 학생용은 끄고 강사용은 켜는 식.
+  const [showSource, setShowSource] = useState(false);
+  const [sourceKinds, setSourceKinds] = useState<{ school: boolean; mock: boolean; textbook: boolean }>({ school: true, mock: true, textbook: false });
+  const sourceTextOf = (p: ProblemData): string | null =>
+    showSource && p.originLabel && p.originKind && sourceKinds[p.originKind] ? p.originLabel : null;
+  const sourceSig = showSource ? `${+sourceKinds.school}${+sourceKinds.mock}${+sourceKinds.textbook}` : 'off';
   // ★ 매쓰홀릭 시험지 인쇄 캡처 대조(2026-09-21, 대표 「차이가 분명히 보인다」):
   //   ① 칸 고정 — 프리셋(4·6·8)에서 단마다 칸 높이를 같게 나눠 2번·4번이 같은 높이에서 시작(매쓰홀릭 countPerColumn).
   //      종전은 남는 공간을 문제 크기 비례로 나눠 옆 단과 줄이 안 맞았다. ② 번호 「01」 큰 연회색.
@@ -300,6 +310,7 @@ export function ExamPaperView({
     showLevel?: boolean; footerUnit?: boolean; footerAuthor?: boolean; footerId?: boolean; duplex?: boolean;
     cover?: CoverSettings;
     equalSlots?: boolean; numberPad?: boolean; figureScale?: 0.65 | 0.8 | 1;
+    showSource?: boolean; sourceKinds?: { school: boolean; mock: boolean; textbook: boolean };
   };
   const [printPresets, setPrintPresets] = useState<PrintPreset[]>([]);
   useEffect(() => {
@@ -312,7 +323,7 @@ export function ExamPaperView({
   const saveCurrentPreset = () => {
     const name = (prompt('이 출력 설정의 이름을 입력하세요 (예: 내신 2단)') || '').trim();
     if (!name) return;
-    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, cover, equalSlots, numberPad, figureScale }]);
+    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, cover, equalSlots, numberPad, figureScale, showSource, sourceKinds }]);
   };
   const applyPreset = (name: string) => {
     const p = printPresets.find((x) => x.name === name);
@@ -321,6 +332,7 @@ export function ExamPaperView({
     setShowLevel(!!p.showLevel); setFooterUnit(!!p.footerUnit); setFooterAuthor(!!p.footerAuthor); setFooterId(!!p.footerId); setDuplex(!!p.duplex);
     setCover(p.cover ? { ...DEFAULT_COVER, ...p.cover } : DEFAULT_COVER);
     setEqualSlots(p.equalSlots ?? true); setNumberPad(p.numberPad ?? true); setFigureScale(p.figureScale ?? 0.8);
+    setShowSource(!!p.showSource); if (p.sourceKinds) setSourceKinds(p.sourceKinds);
     setHeaderColor(p.headerColor ?? null);
     setHeaderTheme(p.headerTheme ?? 'none');
   };
@@ -353,7 +365,7 @@ export function ExamPaperView({
   useEffect(() => {
     setMeasured(false);
     setProblemHeights([]);
-  }, [problems, columns, showLevel, numberPad, figureScale]);
+  }, [problems, columns, showLevel, numberPad, figureScale, sourceSig]);
 
   // 문제 높이 측정
   useLayoutEffect(() => {
@@ -797,7 +809,9 @@ export function ExamPaperView({
       // 헤더 디자인 갤러리 강조색·테마 → 한글 헤더에도 반영 (네이티브 3종 매핑)
       const decoQ = (headerColor ? `&headerColor=${encodeURIComponent(headerColor)}` : '')
         + (headerTheme && headerTheme !== 'none' ? `&headerTheme=${encodeURIComponent(headerTheme)}` : '')
-        + (hwpxHeaderStyle && hwpxHeaderStyle !== 'editorial' ? `&headerStyle=${encodeURIComponent(hwpxHeaderStyle)}` : '');
+        + (hwpxHeaderStyle && hwpxHeaderStyle !== 'editorial' ? `&headerStyle=${encodeURIComponent(hwpxHeaderStyle)}` : '')
+        // ★ 출처 — 화면에서 고른 종류만 한글에도
+        + (showSource ? `&source=${(['school', 'mock', 'textbook'] as const).filter((k) => sourceKinds[k]).join(',')}` : '');
       const res = await fetch(
         `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}${pageCountsQ}${decoQ}`
       );
@@ -828,13 +842,13 @@ export function ExamPaperView({
     } finally {
       setIsDownloadingHwpx(false);
     }
-  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle, headerColor, headerTheme, hwpxHeaderStyle]);
+  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle, headerColor, headerTheme, hwpxHeaderStyle, showSource, sourceKinds]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
   //   textSize 13.5px: 기본 14px 보다 아주 조금 작게(사용자 요청). 측정·렌더 같은 헬퍼라 분할 일치.
   const renderProblem = (problem: ProblemData) => (
-    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" showLevel={showLevel} numberStyle={numberPad ? 'pad' : 'plain'} maxFigureWidth={Math.round(240 * figureScale)} />
+    <ExamProblemRenderer problem={problem} gap={gap} numberOnTop textSize="13.5px" showLevel={showLevel} numberStyle={numberPad ? 'pad' : 'plain'} maxFigureWidth={Math.round(240 * figureScale)} sourceText={sourceTextOf(problem)} />
   );
 
   // 측정용 컬럼 너비 (고정 컬럼 간격 사용)
@@ -946,6 +960,36 @@ export function ExamPaperView({
                 {label}
               </button>
             ))}
+            {/* ★ 출처 — 켜면 문항 번호 줄 오른쪽에 원래 시험지·번호. 종류별로 골라 찍는다 (수학비서 「출처 노출」) */}
+            <div className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowSource((v) => !v)}
+                title="문항 번호 옆에 원래 출처(예: 상산고 2021 고1-1 기말 수학상 14번). 유사·변형 문항에는 찍지 않습니다"
+                className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                  showSource ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'
+                }`}
+              >
+                출처
+              </button>
+              {showSource && ([
+                ['school', '학교기출'],
+                ['mock', '모의고사'],
+                ['textbook', '교재'],
+              ] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setSourceKinds((s) => ({ ...s, [k]: !s[k] }))}
+                  title={`${label} 문항에 출처를 ${sourceKinds[k] ? '찍지 않습니다' : '찍습니다'}`}
+                  className={`rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+                    sourceKinds[k] ? 'bg-white/10 text-content-primary' : 'text-content-muted line-through hover:text-content-secondary'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             {/* ★ 그림 크기 — 기본 원래. 줄이고 싶을 때만 (그래프·도형 최대 폭 배율) */}
             <div className="ml-1 inline-flex items-center gap-1 text-xs text-content-tertiary" title="문항 그림(그래프·도형)의 최대 폭. 원본 시험지 비율에 가깝게 줄입니다">
               그림

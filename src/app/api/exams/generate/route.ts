@@ -9,6 +9,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { resolveInsertInstituteId, applyInstituteFilter } from '@/lib/security/institute-guard';
 import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
+import { applySolutionFilter, parseWithSolution } from '@/lib/exam/solution-filter';
 import { capPerType, pickByBand, pickRandom, pickEvenByUnit, orderForPaper, parsePerTypeCap, parseSelectionMode } from '@/lib/exam/selection';
 import { parseSourceScope, loadSourceProblemIds } from '@/lib/exam/source-scope';
 
@@ -91,6 +92,8 @@ export async function POST(request: NextRequest) {
     const sourceScope = parseSourceScope({ source: criteria?.source, schools: criteria?.schools });
     // ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항 제외 (0 = 끄기, 기본 30일). 매쓰홀릭 「중복출제 방지」 와 같은 뜻.
     const excludeRecentDays = parseExcludeRecentDays(criteria?.excludeRecentDays);
+    // ★ 해설 있는 문제만 (2026-11-11) — available-counts·candidates 와 같은 조건
+    const withSolution = parseWithSolution(criteria?.withSolution);
     // ★ 출제 방식(2026-10-14, 매쓰홀릭 등가): band=난이도별 맞춤(밴드 칸) · random=무작위(밴드 골고루) · even=소단원별 균등
     //   유형별 상한(perTypeCap 1~4, 0=전체) — 한 유형에서 너무 많이 뽑히는 것을 막는다 (매쓰홀릭 「유형별 문제수」)
     const selectionMode = parseSelectionMode(criteria?.selection);
@@ -170,6 +173,7 @@ export async function POST(request: NextRequest) {
         .is('deleted_at', null)
         .in('id', slice);
       if (answerType) base = base.eq('answer_type', answerType);   // 답안 형태 (객관식/서답형)
+      base = applySolutionFilter(base, withSolution);
       const { data: accRows, error: accErr } = await applyInstituteFilter(base, scope, { allowCommonPool: true });
       if (accErr) {
         return NextResponse.json({ error: '문제 조회 실패', detail: accErr.message }, { status: 500 });

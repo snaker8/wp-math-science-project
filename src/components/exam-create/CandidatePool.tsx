@@ -183,7 +183,7 @@ function AiVariantBox({ baseId, baseIndex, onPicked }: {
 }
 
 export function CandidatePool({
-  baseId, baseIndex, excludeIds, onReplace, onAdd, excludeRecentDays = 0,
+  baseId, baseIndex, excludeIds, onReplace, onAdd, excludeRecentDays = 0, withSolution = false,
 }: {
   /** 기준 문항 (이 자리를 대신할 후보를 찾는다) */
   baseId: string;
@@ -194,6 +194,8 @@ export function CandidatePool({
   onAdd: (candidate: CandidateProblem) => void;
   /** 중복출제 방지 — 최근 N일 출제 문항은 후보에서 뺀다 (0 = 끄기). 출제 화면의 설정값을 그대로 받는다 */
   excludeRecentDays?: number;
+  /** 해설 있는 문제만 — 출제 화면의 「해설 있는 문제만」 설정 */
+  withSolution?: boolean;
 }) {
   const [kind, setKind] = useState<CandidateKind>('similar');
   const [items, setItems] = useState<CandidateProblem[]>([]);
@@ -205,6 +207,7 @@ export function CandidatePool({
     try {
       const q = new URLSearchParams({ problemId: baseId, kind, exclude: excludeIds.join(',') });
       if (excludeRecentDays > 0) q.set('excludeRecentDays', String(excludeRecentDays));
+      if (withSolution) q.set('withSolution', '1');
       const res = await fetch(`/api/problems/candidates?${q}`, { cache: 'no-store' });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
@@ -213,7 +216,7 @@ export function CandidatePool({
     } catch (e) {
       setItems([]); setReason(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [baseId, kind, excludeIds, excludeRecentDays]);
+  }, [baseId, kind, excludeIds, excludeRecentDays, withSolution]);
   useEffect(() => { void load(); }, [load]);
 
   return (

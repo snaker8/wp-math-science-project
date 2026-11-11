@@ -24,6 +24,22 @@ export interface HmlProblem {
   choiceImagesBase64: (string | null)[]; // 보기별 그림 (그림 객관식). 빈 배열=텍스트 보기
   choiceHeaders?: string[];   // 표 객관식 컬럼 헤더 (있으면 보기는 | 로 셀 구분)
   choiceLayout?: number;      // ★ 원본 보기 배치 감지값 (5=가로/3=3열/2=2열/1=세로). 자산화 answer_json 기본값용. undefined=불명.
+  solution?: string;          // ★ 미주 [해설] 이후 (텍스트 + $LaTeX$ + [도형]). 없으면 undefined.
+  solutionImagesBase64?: string[]; // 해설 [도형] 순서대로의 그림 dataURL
+}
+
+/** 미주 원형에서 [해설] 이후만 떼어낸다. 그림도 [해설] 뒤의 [도형] 만큼만. */
+export function solutionFromNote(note: RichNote | undefined): { solution: string; images: string[] } | null {
+  if (!note) return null;
+  const m = note.text.match(/\[\s*해\s*설\s*\]/);
+  if (!m || m.index == null) return null;
+  const before = note.text.slice(0, m.index);
+  // 이미지 base64 누출 런 제거 (본문 cleanText 와 같은 기준)
+  const solution = note.text.slice(m.index + m[0].length).replace(/[A-Za-z0-9+/]{40,}={0,2}/g, '').trim();
+  if (!solution) return null;
+  const skip = (before.match(/\[도형\]/g) || []).length;
+  const count = (solution.match(/\[도형\]/g) || []).length;
+  return { solution, images: note.images.slice(skip, skip + count) };
 }
 
 export interface HmlParseResult {
@@ -236,6 +252,7 @@ function renderParagraph(
   binData: Map<string, string>,
   imagesOut: string[],
   answerOut: string[],
+  answerRichOut?: RichNote[],
 ): string {
   const parts: string[] = [];
   let clearedAtEndnote = false;
@@ -258,11 +275,17 @@ function renderParagraph(
         //   빈 미주도 `[정답]`(정답 없음) 으로 채널에 올려 문제 시작으로 잡는다. 정답은 빈 값 → 나중에 입력/AI.
         if (aText) answerOut.push(aText);
         else if (tag === 'ENDNOTE') answerOut.push('[정답]');
+        // ★ 해설 보존 (2026-11-11): 위 answerOut 은 문단을 줄바꿈 없이 이어 붙이고 그림을 버린다(정답 추출용).
+        //   해설을 살리려면 문단 단위 줄바꿈과 그림이 필요해 따로 한 벌 더 만든다. 기존 정답 채널은 그대로.
+        if (answerRichOut) answerRichOut.push(renderNoteRich(enChildren, binData));
         // ★ HML 구조상 stem 은 미주 뒤에 온다. 미주 앞 텍스트(페이지 머리말·번호 잔재,
         //   예: 1번 "…제2교시수학영역")는 본문이 아니므로 버린다. 첫 미주에서 1회만.
         if (!clearedAtEndnote) { parts.length = 0; clearedAtEndnote = true; }
         continue;
       }
+      // ★ 개체 메모(SHAPECOMMENT) 는 화면에 안 보이는 주석이다. 수학비서 출제본은 여기에 내려받은
+      //   계정 이름을 워터마크로 넣는다(2026-11-11 실측: 그림·수식마다 1,612개). 본문·해설로 새면 안 된다.
+      if (tag === 'SHAPECOMMENT') continue;
       if (tag === 'EQUATION') {
         const eqChildren = (n[tag] as OrderedNode[]) || [];
         parts.push(hangulEquationToInlineLatex(extractScript(eqChildren)));
@@ -310,9 +333,34 @@ function findBinRef(node: OrderedNode): string | null {
   return found;
 }
 
-interface RawPara { text: string; images: string[]; answer: string }
+/** 미주(정답·해설) 를 문단 줄바꿈·그림까지 살려 렌더한 것. text 의 [도형] 순서 = images 순서. */
+export interface RichNote { text: string; images: string[] }
 
-/** 모든 P 문단을 읽기 순서로 수집 (text=stem, answer=미주[정답], images) */
+/** 미주 안의 P 문단을 하나씩 렌더해 줄바꿈으로 잇는다 (해설 보존용). */
+function renderNoteRich(nodes: OrderedNode[], binData: Map<string, string>): RichNote {
+  const lines: string[] = [];
+  const images: string[] = [];
+  const walk = (ns: OrderedNode[]) => {
+    for (const x of ns) {
+      const t = tagOf(x);
+      if (t === 'P') {
+        const txt = renderParagraph((x['P'] as OrderedNode[]) || [], binData, images, [])
+          .replace(/[ \t]+/g, ' ')
+          .trim();
+        if (txt) lines.push(txt);
+        continue;
+      }
+      const ch = x[t] as OrderedNode[] | undefined;
+      if (Array.isArray(ch)) walk(ch);
+    }
+  };
+  walk(nodes);
+  return { text: lines.join('\n'), images };
+}
+
+export interface RawPara { text: string; images: string[]; answer: string; notes?: RichNote[] }
+
+/** 모든 P 문단을 읽기 순서로 수집 (text=stem, answer=미주[정답], images, notes=미주 원형) */
 function collectParagraphs(
   root: OrderedNode[],
   binData: Map<string, string>,
@@ -324,11 +372,12 @@ function collectParagraphs(
       if (tag === 'P') {
         const images: string[] = [];
         const answers: string[] = [];
-        const text = renderParagraph((n[tag] as OrderedNode[]) || [], binData, images, answers)
+        const notes: RichNote[] = [];
+        const text = renderParagraph((n[tag] as OrderedNode[]) || [], binData, images, answers, notes)
           .replace(/[ \t]+/g, ' ')
           .trim();
         const answer = answers.join(' ').replace(/[ \t]+/g, ' ').trim();
-        if (text || images.length || answer) out.push({ text, images, answer });
+        if (text || images.length || answer) out.push({ text, images, answer, ...(notes.length ? { notes } : {}) });
         continue; // P 안의 P 중첩은 드묾 — 상위만
       }
       const children = n[tag] as OrderedNode[] | undefined;
@@ -429,7 +478,7 @@ export function stripSourceFootnote(text: string): string {
 
 function segmentProblems(paras: RawPara[]): HmlProblem[] {
   const problems: HmlProblem[] = [];
-  let cur: { number: number; answer: string; lines: string[]; images: string[] } | null = null;
+  let cur: { number: number; answer: string; lines: string[]; images: string[]; sol?: { solution: string; images: string[] } | null } | null = null;
   let n = 0;
   // 묶음문제 공유 지문 보류 — 다음 문제 생성 시 본문 앞에 prepend (직전 문제엔 안 붙임).
   let pending: { text: string; images: string[] } | null = null;
@@ -534,6 +583,7 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
         choiceImagesBase64: hasChoiceImg ? choiceImagesBase64 : [],
         choiceHeaders,
         choiceLayout,
+        ...(cur.sol ? { solution: cur.sol.solution, solutionImagesBase64: cur.sol.images } : {}),
       });
     }
     cur = null;
@@ -553,7 +603,7 @@ function segmentProblems(paras: RawPara[]): HmlProblem[] {
       flush();
       n += 1;
       const answer = answerFromChannel(ansRaw.slice(ansHm.index + ansHm[0].length));
-      cur = { number: n, answer, lines: stem ? [stem] : [], images: [...para.images] };
+      cur = { number: n, answer, lines: stem ? [stem] : [], images: [...para.images], sol: solutionFromNote(para.notes?.find((x) => ANSWER_HEADER_RE.test(x.text)) ?? para.notes?.[0]) };
       applyPending(cur);
       continue;
     }

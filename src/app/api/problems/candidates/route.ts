@@ -21,6 +21,7 @@ import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, applyTrackFilter, resolveInsertInstituteId } from '@/lib/security/institute-guard';
 import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
 import { bandLabelOf } from '@/lib/class/mastery-bands';
+import { applySolutionFilter, parseWithSolution } from '@/lib/exam/solution-filter';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,8 @@ export async function GET(req: NextRequest) {
   const exclude = new Set((sp.get('exclude') ?? '').split(',').map((s) => s.trim()).filter(Boolean));
   // ★ 중복출제 방지 — 교체 후보에서도 최근 N일 출제 문항을 뺀다 (안 주면 0 = 끄기; 출제 화면은 자기 설정값을 보낸다)
   const excludeRecentDays = sp.has('excludeRecentDays') ? parseExcludeRecentDays(sp.get('excludeRecentDays')) : 0;
+  // ★ 해설 있는 문제만 — 출제 화면 설정을 그대로 받는다
+  const withSolution = parseWithSolution(sp.get('withSolution'));
   if (!problemId) return NextResponse.json({ error: 'problemId 가 필요합니다' }, { status: 400 });
   if (!KINDS.includes(kind)) return NextResponse.json({ error: 'kind 가 올바르지 않습니다' }, { status: 400 });
 
@@ -106,6 +109,7 @@ export async function GET(req: NextRequest) {
     .in('id', cands.map((c) => c.problem_id))
     .is('deleted_at', null);
   if (kind === 'essay') pq = pq.eq('answer_type', 'short_answer');
+  pq = applySolutionFilter(pq, withSolution);
   pq = applyInstituteFilter(pq, scope, { allowCommonPool: true });
   pq = applyTrackFilter(pq, scope);
   const { data: probs } = await pq;

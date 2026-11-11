@@ -10,6 +10,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
 import { requireAdminPin } from '@/lib/security/solution-pin';
+import { loadOrigins } from '@/lib/exam/load-origins';
 
 // Next.js 14 Data Cache 비활성화
 export const dynamic = 'force-dynamic';
@@ -173,10 +174,15 @@ export async function GET(
         if (typeName) c.type_name = typeName;
       });
 
+      // 7. 출처 — 문항이 처음 자산화된 시험지(학교기출·모의고사·시중교재) + 원래 번호.
+      //    인쇄 「출처」 옵션을 켜면 문제 위에 「상산고 2021 고1-1 기말 수학상 14번」. 실패해도 시험지는 그대로 연다.
+      const originMap = await loadOrigins(supabaseAdmin, problemIds, examId, scope);
+
       (problemsData || []).forEach((p: any) => {
         problemsMap.set(p.id, {
           ...p,
           classifications: classMap.get(p.id) || null,
+          origin: originMap.get(p.id) || null,
         });
       });
     }
