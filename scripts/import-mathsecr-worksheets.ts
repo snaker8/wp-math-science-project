@@ -23,6 +23,9 @@ import { loadSupabase, parseArgs } from './mathsecr-match';
 const args = parseArgs();
 const COMMIT = args.commit === 'true';
 const CREATED_BY = process.env.IMPORT_USER_ID || 'a629ecb4-965a-43eb-b42e-c0e17c8ff5b9';
+// --allow-partial: 수학비서 목록이 한 난이도에 200문항까지만 내줘 끝까지 못 받는 교재(2026-11-11 실측 18권)를 받은 만큼 넣는다.
+//   빠진 문항 수는 리포트(부족)와 시험지 설명에 남긴다.
+const ALLOW_PARTIAL = args['allow-partial'] === 'true';
 const ONLY = new Set((args.only || '').split(',').filter(Boolean).map(Number));
 if (!args.dir || !args.mydbs || !args.manifest) {
   console.error('--dir --mydbs --manifest 필요');
@@ -76,7 +79,9 @@ async function main() {
     if (!info) { report.push(`${id}: mydbs 에 없음`); continue; }
     metas.sort((a, b) => a.k - b.k);
     const cellCount = metas.reduce((s, m) => s + m.cells.length, 0);
-    if (cellCount < info.questionCount || metas.some((m, i) => m.k !== i)) {
+    // 수학비서가 목록에 안 내주는 문항(난이도 없음 등)이 교재당 몇 개 있다 — 2% 이내 부족은 넣고 리포트에 남긴다
+    const shortBy = info.questionCount - cellCount;
+    if ((!ALLOW_PARTIAL && shortBy > Math.max(2, Math.ceil(info.questionCount * 0.02))) || metas.some((m, i) => m.k !== i)) {
       stat.skippedIncomplete++;
       report.push(`미완  ${info.title} — 받은 ${cellCount}/${info.questionCount} (조각 ${metas.map((m) => m.k).join(',')})`);
       continue;
@@ -97,6 +102,9 @@ async function main() {
       });
     }
     if (bad) { stat.mismatch++; report.push(`불일치 ${info.title} — ${bad}`); continue; }
+    // 조각은 받은 순서(보충분이 뒤)라 원래 번호 순으로 다시 세운다
+    problems.sort((x, y) => x.number - y.number);
+    if (shortBy > 0) report.push(`부족  ${info.title} — ${cellCount}/${info.questionCount} (수학비서 목록에 없는 ${shortBy}문항 제외하고 넣음)`);
 
     const title = info.title.trim();
     const { data: dup, error: dupErr } = await sb.from('exams').select('id').eq('title', title).is('deleted_at', null).limit(1);
@@ -135,7 +143,12 @@ async function main() {
       stat.failed++; report.push(`실패  ${title} — 문항 ${res.savedProblems}/${problems.length} 만 저장돼 되돌림`);
       continue;
     }
-    await sb.from('exams').update({ exam_type: '시중교재' }).eq('id', res.examId);
+    await sb.from('exams').update({
+      exam_type: '시중교재',
+      ...(shortBy > 0
+        ? { description: `수학비서 출제본 적재 — 원본 ${info.questionCount}문항 중 ${cellCount}문항 (수학비서 목록 200문항 제한으로 ${shortBy}문항 미수집)` }
+        : {}),
+    }).eq('id', res.examId);
     stat.books++; stat.problems += res.savedProblems ?? 0; stat.withSolution += sol;
     console.log(`  ✓ ${title} ${res.savedProblems}문항 (해설 ${sol})`);
   }
