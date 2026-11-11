@@ -28,6 +28,7 @@ type ListResponse = {
   levels: TextbookLevel[];
   manager: boolean;
   expiresAt: string | null;
+  request: { at: string; levels: string[] } | null;
   courses: CatalogCourse[];
 };
 
@@ -181,6 +182,14 @@ function TextbooksLibrary() {
             </span>
           )}
           {data?.expiresAt && <span className={META_PILL}>{data.expiresAt}까지 이용</span>}
+          {data && !data.manager && data.levels.length === 1 && (
+            <RequestBox
+              compact
+              have={data.levels}
+              request={data.request}
+              onDone={(request) => setData((d) => (d ? { ...d, request } : d))}
+            />
+          )}
           {data?.manager && (
             <Link
               href={href('/dashboard/textbooks/manage')}
@@ -208,9 +217,13 @@ function TextbooksLibrary() {
           <p className="font-medium">아직 수학교재를 받을 권한이 없습니다</p>
           <p className="text-sm leading-relaxed text-content-tertiary">
             {data.expiresAt ? `이용 기간(${data.expiresAt}까지)이 끝났습니다. ` : ''}
-            원장님이나 관리자에게 <b className="font-medium text-content-secondary">중등·고등 교재 권한</b>을 요청해 주세요.
-            권한이 켜지면 이 화면을 새로고침하면 바로 보입니다.
+            필요한 학교급을 골라 요청하면 관리자 화면에 바로 뜹니다. 켜지면 새로고침하세요.
           </p>
+          <RequestBox
+            have={[]}
+            request={data.request}
+            onDone={(request) => setData((d) => (d ? { ...d, request } : d))}
+          />
         </div>
       )}
 
@@ -394,6 +407,95 @@ function BookGrid({
         </li>
       ))}
     </ul>
+  );
+}
+
+/** 권한 요청 — 고른 학교급을 관리자 화면에 「요청」으로 올린다. 이미 요청했으면 그 상태를 보여 준다. */
+function RequestBox({
+  have, request, onDone, compact = false,
+}: {
+  have: TextbookLevel[];
+  request: { at: string; levels: string[] } | null;
+  onDone: (r: { at: string; levels: string[] }) => void;
+  compact?: boolean;
+}) {
+  const missing = (['중등', '고등'] as TextbookLevel[]).filter((l) => !have.includes(l));
+  const [pick, setPick] = useState<TextbookLevel[]>(missing);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const pending = !!request && missing.some((l) => request.levels.includes(l));
+  if (pending && request) {
+    return (
+      <p role="status" className={compact ? META_PILL : 'mt-3 text-sm text-content-secondary'}>
+        {request.levels.join('·')} 요청함 · {request.at.slice(5, 10).replace('-', '/')} — 관리자 확인 중
+      </p>
+    );
+  }
+
+  const send = async () => {
+    if (!pick.length || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch('/api/textbooks/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ levels: pick }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message || '요청하지 못했습니다.');
+      onDone(body.request);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={send}
+        disabled={busy}
+        className={`inline-flex min-h-9 items-center gap-1.5 ${RADIUS.control} border border-white/[.08] bg-white/[.04] px-3 text-sm text-content-secondary hover:bg-white/[.06] hover:text-content-primary disabled:opacity-50 ${FOCUS}`}
+      >
+        {busy && <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />}
+        <span className="whitespace-nowrap">{missing.join('·')} 교재도 요청</span>
+        {err && <span className="text-xs text-red-300">{err}</span>}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-4 flex flex-col items-center gap-3">
+      <div role="group" aria-label="요청할 학교급" className="flex gap-2">
+        {missing.map((l) => {
+          const on = pick.includes(l);
+          return (
+            <button
+              key={l}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setPick((p) => (on ? p.filter((x) => x !== l) : [...p, l]))}
+              className={`${CHIP} ${on ? CHIP_ON : CHIP_OFF}`}
+            >
+              {on && <Check className="mr-1 h-3.5 w-3.5" aria-hidden />}
+              {l}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={send}
+        disabled={!pick.length || busy}
+        className={`inline-flex min-h-10 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black hover:bg-zinc-200 disabled:opacity-40 ${FOCUS}`}
+      >
+        {busy && <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden />}
+        권한 요청하기
+      </button>
+      {err && <p role="alert" className="text-sm text-red-300">{err}</p>}
+    </div>
   );
 }
 

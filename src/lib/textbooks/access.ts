@@ -64,3 +64,12 @@ export function validateAccessInput(input: unknown):
   }
   return { ok: true, value: { userId: o.userId, canMiddle: o.canMiddle, canHigh: o.canHigh, expiresAt } };
 }
+
+/** 「권한 요청」 입력 검사 — 중등·고등 중 하나 이상. */
+export function validateRequestLevels(input: unknown): { ok: true; levels: TextbookLevel[] } | { ok: false; message: string } {
+  const raw = (input && typeof input === 'object' ? (input as Record<string, unknown>).levels : null);
+  if (!Array.isArray(raw)) return { ok: false, message: '요청할 학교급을 골라 주세요.' };
+  const levels = TEXTBOOK_LEVELS.filter((l) => raw.includes(l));
+  if (!levels.length) return { ok: false, message: '요청할 학교급을 골라 주세요.' };
+  return { ok: true, levels };
+}

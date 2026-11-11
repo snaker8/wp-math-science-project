@@ -32,7 +32,7 @@ export async function GET() {
   const [staffRes, accessRes, instRes, dlRes] = await Promise.all([
     supabaseAdmin.from('users').select('id, full_name, email, role, institute_id')
       .in('role', STAFF_ROLES).is('deleted_at', null).order('full_name'),
-    supabaseAdmin.from('textbook_access').select('user_id, can_middle, can_high, expires_at, updated_at'),
+    supabaseAdmin.from('textbook_access').select('user_id, can_middle, can_high, expires_at, updated_at, requested_at, requested_levels'),
     supabaseAdmin.from('institutes').select('id, name, display_name'),
     supabaseAdmin.from('textbook_downloads').select('user_id, created_at')
       .order('created_at', { ascending: false }).limit(2000),
@@ -63,6 +63,8 @@ export async function GET() {
       canHigh: !!a?.can_high,
       expiresAt: (a?.expires_at as string | null) ?? null,
       expired: isExpired((a?.expires_at as string | null) ?? null, today),
+      requestedAt: (a?.requested_at as string | null) ?? null,
+      requestedLevels: (a?.requested_levels as string[] | null) ?? [],
       lastDownloadAt: lastDl.get(u.id as string)?.at ?? null,
       downloadCount: lastDl.get(u.id as string)?.count ?? 0,
     };
@@ -92,6 +94,8 @@ export async function PUT(req: Request) {
     can_high: v.canHigh,
     expires_at: v.expiresAt,
     granted_by: authed.data.user.id,
+    requested_at: null, // 관리자가 정했으니 요청은 처리됨
+    requested_levels: null,
     updated_at: new Date().toISOString(),
   });
   if (error) return NextResponse.json({ error: 'DB error', message: error.message }, { status: 500 });

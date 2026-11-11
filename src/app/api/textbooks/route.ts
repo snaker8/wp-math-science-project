@@ -17,15 +17,16 @@ export async function GET() {
   const { user, scope } = authed.data;
 
   const manager = isTextbookManager(user.role, scope.isSuperAdmin);
-  let access: (TextbookAccessRow & { expires_at: string | null }) | null = null;
+  type MyAccess = TextbookAccessRow & { requested_at: string | null; requested_levels: string[] | null };
+  let access: MyAccess | null = null;
   if (!manager) {
     const { data, error } = await supabaseAdmin
       .from('textbook_access')
-      .select('can_middle, can_high, expires_at')
+      .select('can_middle, can_high, expires_at, requested_at, requested_levels')
       .eq('user_id', user.id)
       .maybeSingle();
     if (error) return NextResponse.json({ error: 'DB error', message: error.message }, { status: 500 });
-    access = data as TextbookAccessRow | null;
+    access = data as MyAccess | null;
   }
   const levels = allowedLevels({ manager, access });
 
@@ -49,6 +50,7 @@ export async function GET() {
     levels,
     manager,
     expiresAt: access?.expires_at ?? null,
+    request: access?.requested_at ? { at: access.requested_at, levels: access.requested_levels ?? [] } : null,
     courses: buildCatalog(rows),
   });
 }
