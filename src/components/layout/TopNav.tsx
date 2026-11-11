@@ -100,11 +100,16 @@ export function TopNav() {
   const { scope: userScope } = useUserScope();
 
   // ★ role 필터 — 그룹의 roles 미지정 시 모두 노출, 지정 시 해당 role 만
-  const visibleGroups = topNavGroups.filter((g) => {
-    if (!g.roles || g.roles.length === 0) return true;
-    if (!role) return false; // 미로딩·미인증 시 권한 메뉴 숨김 (보수적)
-    return g.roles.includes(role);
-  });
+  const visibleGroups = topNavGroups
+    .filter((g) => {
+      if (!g.roles || g.roles.length === 0) return true;
+      if (!role) return false; // 미로딩·미인증 시 권한 메뉴 숨김 (보수적)
+      return g.roles.includes(role);
+    })
+    // ★ 트랙 전용 항목 (예: 수학교재는 수학 트랙만) — tracks 미지정 항목은 그대로
+    .map((g) => (g.children
+      ? { ...g, children: g.children.filter((c) => !c.tracks || c.tracks.includes(track)) }
+      : g));
   // ★ 트랙 prefix 일괄 적용 — /dashboard/X → /{track}/dashboard/X (PR-T9)
   const trackedGroups = withTrackGroups(visibleGroups, track);
 
