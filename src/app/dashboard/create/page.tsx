@@ -105,6 +105,7 @@ const MY_STAGES_KEY = 'msb_diff_my_stages';
 // ★ 중복출제 방지 (2026-10-13, 매쓰홀릭 「중복출제 방지 — 최근 한달간 출제했던 문항을 제외」 등가, 기본 켜짐 30일)
 //   0 = 끄기. 학원 단위로 최근 N일 안에 출제한 문항을 가능 문항수·자동 출제·교체 후보 모두에서 뺀다.
 const DEDUPE_DAYS_KEY = 'msb_dedupe_days';
+const WITH_SOLUTION_KEY = 'msb_with_solution';
 // ★ 출제 방식·유형별 문제수 (2026-10-14, 매쓰홀릭 「출제 방식 / 유형별 문제수」 등가) — 규칙은 src/lib/exam/selection.ts
 const SELECTION_MODE_KEY = 'msb_selection_mode';
 const PER_TYPE_CAP_KEY = 'msb_per_type_cap';
@@ -460,6 +461,7 @@ function ManualSearchPanel({
   onToggleSelect,
   source = '',
   schools = [],
+  withSolution = false,
 }: {
   subjectCode: string;
   selectedTypeCodes: string[];
@@ -468,6 +470,8 @@ function ManualSearchPanel({
   /** 출처 범위 (전체 '' / school / textbook / mock) — 검색도 같은 범위로 */
   source?: string;
   schools?: string[];
+  /** 해설 있는 문제만 */
+  withSolution?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState('');
@@ -491,6 +495,7 @@ function ManualSearchPanel({
       if (tc) params.set('typeCode', tc);
       if (source) params.set('source', source);
       if (source === 'school' && schools.length) params.set('schools', schools.join(','));
+      if (withSolution) params.set('withSolution', '1');
       params.set('limit', '30');
 
       const res = await fetch(`/api/problems/search?${params}`);
@@ -503,7 +508,7 @@ function ManualSearchPanel({
     } finally {
       setIsLoading(false);
     }
-  }, [query, difficulty, answerType, subjectCode, selectedTypeCodes, source, schools]);
+  }, [query, difficulty, answerType, subjectCode, selectedTypeCodes, source, schools, withSolution]);
 
   // 엔터키 검색
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -645,6 +650,7 @@ function UnifiedPreviewPanel({
   onMetaChange,
   refetchProblems,
   excludeRecentDays = 0,
+  withSolution = false,
 }: {
   previewTab: PreviewTab;
   onTabChange: (tab: PreviewTab) => void;
@@ -660,6 +666,8 @@ function UnifiedPreviewPanel({
   refetchProblems: () => void;
   /** 중복출제 방지 기간(일) — 교체 후보에도 같은 제외를 건다 */
   excludeRecentDays?: number;
+  /** 해설 있는 문제만 — 교체 후보에도 */
+  withSolution?: boolean;
 }) {
   const tabs: PreviewTab[] = ['시험지', '빠른정답', '해설지'];
   const ready = !!examId && problems.length > 0;
@@ -945,6 +953,7 @@ function UnifiedPreviewPanel({
                 onReplace={(c) => void editReplace(c)}
                 onAdd={(c) => void editAdd(c)}
                 excludeRecentDays={excludeRecentDays}
+                withSolution={withSolution}
               />
             )}
           </div>
@@ -975,6 +984,8 @@ function DifficultyDistributionBar({
   onDeleteMyStage,
   dedupeDays,
   onDedupeDays,
+  withSolution,
+  onWithSolution,
   selectionMode,
   onSelectionMode,
   perTypeCap,
@@ -1002,6 +1013,9 @@ function DifficultyDistributionBar({
   /** 중복출제 방지 기간(일), 0 = 끄기 */
   dedupeDays: number;
   onDedupeDays: (days: number) => void;
+  /** 해설 있는 문제만 (수학비서 「해설 있는 문항」 등가) */
+  withSolution: boolean;
+  onWithSolution: (v: boolean) => void;
   /** 출제 방식 — band 일 때만 밴드 칸·평가 난이도가 뜻이 있다 */
   selectionMode: SelectionMode;
   onSelectionMode: (m: SelectionMode) => void;
@@ -1146,6 +1160,22 @@ function DifficultyDistributionBar({
             {dedupeDays > 0 && excludedRecent > 0 && (
               <span className="tabular-nums text-content-muted">{excludedRecent}문제 제외</span>
             )}
+          </div>
+          {/* ★ 해설 있는 문제만 (2026-11-11 대표 「수학비서처럼 해설 있는 문제 선택 옵션」) — 해설이 원래 없는 문항은 수업용에서 뺀다 */}
+          <div
+            className="flex items-center gap-1.5 rounded-lg border border-subtle px-2 py-1 text-[11px] text-content-secondary"
+            title={withSolution ? '해설이 있는 문항에서만 뽑습니다 (있는 문제 수·교체 후보도 같은 조건)' : '해설이 없는 문항도 뽑힐 수 있습니다'}
+          >
+            <button
+              type="button"
+              role="switch"
+              aria-checked={withSolution}
+              onClick={() => onWithSolution(!withSolution)}
+              className={`relative h-4 w-7 rounded-full transition-colors ${withSolution ? 'bg-white' : 'bg-white/15'}`}
+            >
+              <span className={`absolute top-0.5 h-3 w-3 rounded-full transition-all ${withSolution ? 'left-3.5 bg-black' : 'left-0.5 bg-white/70'}`} />
+            </button>
+            <span className={withSolution ? 'text-content-primary' : ''}>해설 있는 문제만</span>
           </div>
           {/* ★ 문제 수 — 매쓰홀릭 「문제 수」 프리셋 + 직접 입력 (2026-10-10). 단계가 켜져 있으면 바꾸는 즉시 다시 배분 */}
           <div className="flex items-center gap-1 text-[11px] text-content-secondary">
@@ -1389,6 +1419,10 @@ export default function PaperCreatePage() {
     setDedupeDays(days);
     try { localStorage.setItem(DEDUPE_DAYS_KEY, String(days)); } catch { /* ignore */ }
   };
+  // ★ 해설 있는 문제만 — 기본 꺼짐. 다음 출제에도 유지
+  const [withSolution, setWithSolution] = useState(false);
+  useEffect(() => { try { setWithSolution(localStorage.getItem(WITH_SOLUTION_KEY) === '1'); } catch { /* ignore */ } }, []);
+  const changeWithSolution = (v: boolean) => { setWithSolution(v); try { localStorage.setItem(WITH_SOLUTION_KEY, v ? '1' : '0'); } catch { /* ignore */ } };
   // ★ 평가 난이도 단계 (2026-10-10, 매쓰홀릭 등가): null=맞춤(수동) · 1~6 · 'my:이름'. 단계가 켜져 있으면
   //   문제 수·가능 문항수가 바뀔 때마다 밴드를 다시 배분한다. 칸을 손으로 고치면 맞춤으로.
   const [diffStage, setDiffStage] = useState<number | string | null>(null);
@@ -1642,7 +1676,7 @@ export default function PaperCreatePage() {
         // ★ POST 본문으로 — 세부유형 코드가 수백 개면 GET URL 이 헤더 한도(Vercel 16KB)를 넘는다
         const res = await fetch('/api/exams/available-counts', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType, excludeRecentDays: dedupeDays, perTypeCap, source: sourceKind, schools: sourceKind === 'school' ? sourceSchools : [] }),
+          body: JSON.stringify({ typeCodes: selectedTypeCodes, answerType, excludeRecentDays: dedupeDays, perTypeCap, source: sourceKind, schools: sourceKind === 'school' ? sourceSchools : [], withSolution }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -1656,7 +1690,7 @@ export default function PaperCreatePage() {
     // ★ answerType 도 deps — 답안 형태를 바꾸면 밴드별 「있는 문제 수」를 다시 세야 한다
     // ★ 배열 대신 문자열 키 — 같은 범위인데 배열 참조만 바뀌어 6번씩 다시 세던 것 (실측 09-20)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTypeCodes.join(','), answerType, dedupeDays, perTypeCap, sourceKind, sourceSchools.join('|')]);
+  }, [selectedTypeCodes.join(','), answerType, dedupeDays, perTypeCap, sourceKind, sourceSchools.join('|'), withSolution]);
 
   // ★ 단계 적용 — 문제 수·가능 문항수·단계가 바뀔 때마다 (맞춤이면 손대지 않음)
   useEffect(() => {
@@ -1900,6 +1934,7 @@ export default function PaperCreatePage() {
           source: sourceKind,
           schools: sourceKind === 'school' ? sourceSchools : [],
           excludeRecentDays: dedupeDays,
+          withSolution,
           selection: selectionMode,
           perTypeCap,
           maxQuestions,
@@ -2220,6 +2255,7 @@ export default function PaperCreatePage() {
                     onToggleSelect={handleManualToggle}
                     source={sourceKind}
                     schools={sourceKind === 'school' ? sourceSchools : []}
+                    withSolution={withSolution}
                   />
                 ) : (
                   <TypeDetailPanel
@@ -2254,6 +2290,8 @@ export default function PaperCreatePage() {
                 onDeleteMyStage={handleDeleteMyStage}
                 dedupeDays={dedupeDays}
                 onDedupeDays={changeDedupeDays}
+                withSolution={withSolution}
+                onWithSolution={changeWithSolution}
                 selectionMode={selectionMode}
                 onSelectionMode={changeSelectionMode}
                 perTypeCap={perTypeCap}
@@ -2306,6 +2344,7 @@ export default function PaperCreatePage() {
             onMetaChange={setPreviewExamMeta}
             refetchProblems={refetchGenerated}
             excludeRecentDays={dedupeDays}
+            withSolution={withSolution}
           />
         </div>
       </div>

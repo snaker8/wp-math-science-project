@@ -15,6 +15,7 @@ import { applyInstituteFilter, resolveInsertInstituteId } from '@/lib/security/i
 import { loadRecentlyIssuedProblemIds, parseExcludeRecentDays } from '@/lib/exam/recent-issued';
 import { capPerType, deterministicRng, parsePerTypeCap, type PoolRow } from '@/lib/exam/selection';
 import { parseSourceScope, loadSourceProblemIds, type SourceScope } from '@/lib/exam/source-scope';
+import { applySolutionFilter, parseWithSolution } from '@/lib/exam/solution-filter';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,17 +29,17 @@ export async function GET(request: NextRequest) {
   const typeCodes = (searchParams.get('typeCodes') || '').split(',').filter(Boolean);
   const answerType = searchParams.get('answerType') || '';
   const sourceScope = parseSourceScope({ source: searchParams.get('source'), schools: searchParams.get('schools') });
-  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(searchParams.get('excludeRecentDays')), parsePerTypeCap(searchParams.get('perTypeCap')), sourceScope);
+  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(searchParams.get('excludeRecentDays')), parsePerTypeCap(searchParams.get('perTypeCap')), sourceScope, parseWithSolution(searchParams.get('withSolution')));
 }
 
 export async function POST(request: NextRequest) {
-  let body: { typeCodes?: unknown; answerType?: unknown; excludeRecentDays?: unknown; perTypeCap?: unknown; source?: unknown; schools?: unknown } = {};
+  let body: { typeCodes?: unknown; answerType?: unknown; excludeRecentDays?: unknown; perTypeCap?: unknown; source?: unknown; schools?: unknown; withSolution?: unknown } = {};
   try { body = await request.json(); } catch { /* 빈 본문 */ }
   const typeCodes = Array.isArray(body.typeCodes) ? (body.typeCodes as unknown[]).filter((c): c is string => typeof c === 'string' && /^MS\d{2}/.test(c)) : [];
   const answerType = typeof body.answerType === 'string' ? body.answerType : '';
   // ★ 출처 범위(전체/학교기출→특정 학교/시중교재/모의고사) — generate 와 같은 함수로 같은 집합 (2026-10-25)
   const sourceScope = parseSourceScope({ source: body.source, schools: body.schools });
-  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(body.excludeRecentDays), parsePerTypeCap(body.perTypeCap), sourceScope);
+  return countAvailable(typeCodes, answerType, parseExcludeRecentDays(body.excludeRecentDays), parsePerTypeCap(body.perTypeCap), sourceScope, parseWithSolution(body.withSolution));
 }
 
 // ★ .or() 필터는 한 번에 150개씩 — PostgREST 도 GET 이라 like 절 수백 개는 URL 한도를 넘는다
@@ -46,7 +47,7 @@ const OR_CHUNK = 150;
 
 // ★ 중복출제 방지 — 최근 N일 안에 이 학원이 출제한 문항은 「있는 문제 수」에서도 뺀다 (generate 와 같은 집합).
 // ★ 유형별 상한(perTypeCap) 도 같은 규칙으로 걸어 「선택 N」(= 상한 적용 후 후보 수) 을 돌려준다.
-async function countAvailable(typeCodes: string[], answerType: string, excludeRecentDays: number, perTypeCap: number, sourceScope: SourceScope) {
+async function countAvailable(typeCodes: string[], answerType: string, excludeRecentDays: number, perTypeCap: number, sourceScope: SourceScope, withSolution = false) {
   const authed = await requireAuthScope();
   if (!authed.ok) return authed.response;
   const { scope } = authed.data;
@@ -99,6 +100,8 @@ async function countAvailable(typeCodes: string[], answerType: string, excludeRe
       let base = sb.from('problems').select('id').is('deleted_at', null).in('id', slice);
       // ★ 답안 형태를 고르면 카운트도 그 형태만 센다 — 화면 숫자와 실제로 뽑히는 문제가 어긋나면 안 된다
       if (answerType) base = base.eq('answer_type', answerType);
+      // ★ 해설 있는 문제만 — generate·candidates 와 같은 조건 (「보이는 수 = 뽑히는 수」)
+      base = applySolutionFilter(base, withSolution);
       const { data: accRows, error } = await applyInstituteFilter(base, scope, { allowCommonPool: true });
       if (error) {
         console.error('[available-counts] access error:', error.message);

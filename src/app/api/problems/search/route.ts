@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { applyInstituteFilter, applyTrackFilter } from '@/lib/security/institute-guard';
 import { parseSourceScope, loadSourceProblemIds } from '@/lib/exam/source-scope';
+import { applySolutionFilter, parseWithSolution } from '@/lib/exam/solution-filter';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
   // ★ 출처 범위 — `source=school|textbook|mock|diagnostic` + `schools=a,b` (lib/exam/source-scope, 집계·생성과 같은 집합)
   const sourceScope = parseSourceScope({ source: searchParams.get('source'), schools: searchParams.get('schools') });
+  const withSolution = parseWithSolution(searchParams.get('withSolution'));
 
   try {
     // ★ 1단계: classifications에서 조건에 맞는 problem_id 목록 먼저 조회
@@ -110,6 +112,8 @@ export async function GET(request: NextRequest) {
     if (answerType) {
       query = query.eq('answer_type', answerType);
     }
+    // ★ 해설 있는 문제만 — 출제 세 곳과 같은 조건
+    query = applySolutionFilter(query, withSolution);
 
     // 격리 필터 적용 (공통 풀 NULL 도 포함) + 트랙 필터 (flag false 시 no-op)
     const filteredQuery = applyInstituteFilter(query, scope, { allowCommonPool: true });
