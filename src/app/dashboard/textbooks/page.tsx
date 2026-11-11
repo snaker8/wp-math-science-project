@@ -168,10 +168,10 @@ function TextbooksLibrary() {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Library className="h-5 w-5 text-content-tertiary" aria-hidden />
-            <h1 className="text-lg font-semibold">교재 자료실</h1>
+            <h1 className="text-lg font-semibold">수학교재</h1>
           </div>
           <p className="mt-1 text-sm text-content-tertiary">
-            과정을 고르고 교재의 본문·해설·정답을 누르면 내려받습니다.
+            중·고등 수학 시중교재 — 과정을 고르고 본문·해설·정답을 누르면 내려받습니다.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -187,7 +187,7 @@ function TextbooksLibrary() {
               className={`inline-flex min-h-9 items-center gap-1.5 ${RADIUS.control} border border-white/[.08] bg-white/[.04] px-3 text-sm text-content-secondary hover:bg-white/[.06] hover:text-content-primary ${FOCUS}`}
             >
               <Settings2 className="h-4 w-4" aria-hidden />
-              <span className="whitespace-nowrap">교재 권한 관리</span>
+              <span className="whitespace-nowrap">수학교재 권한 관리</span>
             </Link>
           )}
         </div>
@@ -205,7 +205,7 @@ function TextbooksLibrary() {
       {data && data.levels.length === 0 && (
         <div className={`${RADIUS.panel} ${PANEL_SURFACE} mx-auto flex max-w-lg flex-col items-center gap-2 px-6 py-14 text-center`}>
           <Lock className="h-6 w-6 text-content-tertiary" aria-hidden />
-          <p className="font-medium">아직 교재를 받을 권한이 없습니다</p>
+          <p className="font-medium">아직 수학교재를 받을 권한이 없습니다</p>
           <p className="text-sm leading-relaxed text-content-tertiary">
             {data.expiresAt ? `이용 기간(${data.expiresAt}까지)이 끝났습니다. ` : ''}
             원장님이나 관리자에게 <b className="font-medium text-content-secondary">중등·고등 교재 권한</b>을 요청해 주세요.

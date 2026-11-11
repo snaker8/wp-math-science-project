@@ -40,6 +40,8 @@ export interface NavItem {
   description?: string;
   activeColor?: string;
   group?: 'main' | 'tutor' | 'system' | 'student' | 'parent';
+  /** 이 트랙에서만 메뉴에 보인다 (미지정 = 모든 트랙). 예) 수학교재는 수학 트랙만 */
+  tracks?: Array<'math' | 'science'>;
 }
 
 // 메인 대시보드 메뉴 (선생님/학원 관리)
@@ -104,9 +106,10 @@ export const dashboardNavItems: NavItem[] = [
     // 2026-11-11 대표 「수학교재 파일 — 권한 있는 사람만 내려받게, 권한은 관리자가」. 권한 화면은 /dashboard/textbooks/manage.
     href: '/dashboard/textbooks',
     icon: Library,
-    label: '교재 자료실',
-    description: '시중교재 본문·해설·정답 내려받기',
+    label: '수학교재',
+    description: '수학 시중교재 본문·해설·정답 내려받기',
     group: 'main',
+    tracks: ['math'],
   },
   {
     href: '/dashboard/materials/diagrams',
@@ -348,7 +351,7 @@ export const topNavGroups: NavGroup[] = [
       dash('/dashboard/skills'),             // 유형/문제관리
       dash('/dashboard/similar'),            // 출판교재유사
       dash('/dashboard/materials'),          // 학원자료
-      dash('/dashboard/textbooks'),          // 교재 자료실 (시중교재 PDF 내려받기, 권한제)
+      dash('/dashboard/textbooks'),          // 수학교재 (시중교재 PDF 내려받기, 권한제)
       dash('/dashboard/materials/diagrams'), // 도식 갤러리
       dash('/dashboard/corrections'),        // 분류 보정 이력 (자동 학습 회로)
     ],

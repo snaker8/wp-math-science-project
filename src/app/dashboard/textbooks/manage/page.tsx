@@ -150,14 +150,14 @@ export default function TextbookAccessPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <Link href={href('/dashboard/textbooks')} className={`mb-2 inline-flex min-h-8 items-center gap-1 rounded text-xs text-content-tertiary hover:text-content-primary ${FOCUS}`}>
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> 교재 자료실
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> 수학교재
           </Link>
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-content-tertiary" aria-hidden />
-            <h1 className="text-lg font-semibold">교재 권한 관리</h1>
+            <h1 className="text-lg font-semibold">수학교재 권한 관리</h1>
           </div>
           <p className="mt-1 text-sm text-content-tertiary">
-            켠 학교급의 교재만 내려받을 수 있습니다. 바꾸면 바로 저장되고, 끄면 그 즉시 막힙니다.
+            켠 학교급의 수학교재만 내려받을 수 있습니다. 바꾸면 바로 저장되고, 끄면 그 즉시 막힙니다.
           </p>
         </div>
         {rows && (
