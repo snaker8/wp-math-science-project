@@ -49,6 +49,9 @@ const OVERWRITE = args.overwrite === "true";
 const FIX_POLLUTED = args["fix-polluted"] === "true";
 // 우리 정답이 빈 문항만 수학비서 정답으로 채움 (다른 값으로 덮어쓰지 않는다)
 const FILL_EMPTY = args["fill-empty-answers"] === "true";
+// 순서 검산 — 출처 줄 시험지명이 담은 시험지와 같은 비율 하한. 모의고사는 같은 문항이 여러 출처(교육청·평가원)에
+// 걸려 다른 이름이 찍히므로 낮춰 돌린다(어긋남 0 은 그대로 필수, 문항마다 본문 유사도도 따로 본다).
+const MIN_TITLE_HIT = Number(args["min-title-hit"] ?? 0.8);
 const DIR = args.bundles;
 const ONLY = args.only ? new Set(args.only.split(",")) : null;
 if (!DIR || !args.mydbs) {
@@ -262,7 +265,7 @@ async function main() {
         else titleMiss++;
       }
     });
-    if (titleMiss > 0 || titleHits < items.length * 0.8) {
+    if (titleMiss > 0 || titleHits < items.length * MIN_TITLE_HIT) {
       report.skippedBundles.push(
         `${no}: 순서 검산 실패 (일치 ${titleHits}, 어긋남 ${titleMiss}, 전체 ${items.length})`,
       );
