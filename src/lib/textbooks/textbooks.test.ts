@@ -77,3 +77,12 @@ describe('교재 목록 묶기', () => {
     expect(formatSize(210_389)).toBe('210KB');
   });
 });
+
+describe('권한 요청 입력', () => {
+  it('중등·고등만 남기고, 하나도 없으면 거절', async () => {
+    const { validateRequestLevels } = await import('./access');
+    expect(validateRequestLevels({ levels: ['고등', '초등', '중등'] })).toEqual({ ok: true, levels: ['중등', '고등'] });
+    expect(validateRequestLevels({ levels: [] }).ok).toBe(false);
+    expect(validateRequestLevels(null).ok).toBe(false);
+  });
+});

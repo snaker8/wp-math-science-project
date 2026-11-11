@@ -30,6 +30,8 @@ type StaffRow = {
   canHigh: boolean;
   expiresAt: string | null;
   expired: boolean;
+  requestedAt: string | null;
+  requestedLevels: string[];
   lastDownloadAt: string | null;
   downloadCount: number;
 };
@@ -61,7 +63,7 @@ export default function TextbookAccessPage() {
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<Record<string, RowState>>({});
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'granted' | 'none'>('all');
+  const [filter, setFilter] = useState<'all' | 'requested' | 'granted' | 'none'>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export default function TextbookAccessPage() {
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.message || '저장하지 못했습니다.');
-      setRows((rs) => rs?.map((x) => (x.id === row.id ? { ...next, expired: !!body.expired } : x)) ?? rs);
+      setRows((rs) => rs?.map((x) => (x.id === row.id ? { ...next, expired: !!body.expired, requestedAt: null, requestedLevels: [] } : x)) ?? rs);
       setState((s) => ({ ...s, [row.id]: { s: 'saved' } }));
       setTimeout(() => setState((s) => {
         if (s[row.id]?.s !== 'saved') return s;
@@ -111,8 +113,9 @@ export default function TextbookAccessPage() {
     return (rows ?? []).filter((r) => {
       if (q && !(`${r.name} ${r.email ?? ''} ${r.institute ?? ''}`.toLowerCase().includes(q))) return false;
       const has = r.isManager || ((r.canMiddle || r.canHigh) && !r.expired);
+      if (filter === 'requested') return !!r.requestedAt;
       return filter === 'all' || (filter === 'granted' ? has : !has);
-    });
+    }).sort((a, b) => (b.requestedAt ? 1 : 0) - (a.requestedAt ? 1 : 0)); // 요청 들어온 사람이 위로
   }, [rows, query, filter]);
 
   const visibleEditable = visible.filter((r) => !r.isManager);
@@ -142,6 +145,7 @@ export default function TextbookAccessPage() {
       granted: e.filter((r) => (r.canMiddle || r.canHigh) && !r.expired).length,
       soon: e.filter((r) => r.expiresAt && !r.expired && today && daysBetween(today, r.expiresAt) <= 14).length,
       total: e.length,
+      requested: e.filter((r) => r.requestedAt).length,
     };
   }, [editable, today]);
 
@@ -163,6 +167,15 @@ export default function TextbookAccessPage() {
         {rows && (
           <div className="flex flex-wrap gap-2 text-xs tabular-nums">
             <span className="rounded border border-white/[.08] bg-white/[.04] px-2 py-0.5 text-content-secondary">권한 있음 {counts.granted} / {counts.total}명</span>
+            {counts.requested > 0 && (
+              <button
+                type="button"
+                onClick={() => setFilter('requested')}
+                className={`rounded border border-white/[.20] bg-white/[.10] px-2 py-0.5 font-medium text-content-primary hover:bg-white/[.14] ${FOCUS}`}
+              >
+                권한 요청 {counts.requested}건 — 보기
+              </button>
+            )}
             {counts.soon > 0 && (
               <span className="inline-flex items-center gap-1 rounded border border-white/[.12] bg-white/[.06] px-2 py-0.5 text-content-primary">
                 <Clock className="h-3 w-3" aria-hidden /> 14일 안에 만료 {counts.soon}명
@@ -194,7 +207,7 @@ export default function TextbookAccessPage() {
               />
             </div>
             <div role="group" aria-label="보기" className={`inline-flex ${RADIUS.control} border border-white/[.08] p-0.5`}>
-              {([['all', '전체'], ['granted', '권한 있음'], ['none', '권한 없음']] as const).map(([k, label]) => (
+              {([['all', '전체'], ['requested', `요청 ${counts.requested}`], ['granted', '권한 있음'], ['none', '권한 없음']] as const).map(([k, label]) => (
                 <button
                   key={k}
                   type="button"
@@ -252,7 +265,14 @@ export default function TextbookAccessPage() {
                         )}
                       </td>
                       <th scope="row" className="px-3 py-2 text-left font-normal">
-                        <div className="font-medium">{r.name}</div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-medium">{r.name}</span>
+                          {r.requestedAt && (
+                            <span className="whitespace-nowrap rounded border border-white/[.20] bg-white/[.10] px-1.5 py-px text-xs text-content-primary">
+                              {r.requestedLevels.join('·')} 요청 · {r.requestedAt.slice(5, 10).replace('-', '/')}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-content-tertiary">{r.email}</div>
                       </th>
                       <td className="px-3 py-2 text-content-secondary">
