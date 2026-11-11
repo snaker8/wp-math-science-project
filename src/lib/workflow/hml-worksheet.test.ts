@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseWorksheetParagraphs, parseChapterPara } from './hml-worksheet';
+import { parseWorksheetParagraphs, parseChapterPara, stripWorksheetHeader, sourceLineOf } from './hml-worksheet';
 import { solutionFromNote, type RawPara } from './hml-parser';
 
 const chapterTab = '\\begin{tabular}{|c|}\\hline 07 공통수학1 \\\\ \\hline 06 이차함수와 이차방정식 \\\\ \\hline 02 이차함수의 최대와 최소 \\\\ \\hline 05 이차함수의 Mm5 (케이스 분류) \\\\ \\hline\\end{tabular}';
@@ -51,5 +51,35 @@ describe('parseWorksheetParagraphs (수학비서 내 문제지 출제본)', () =
   it('다음 문항의 유형 표는 앞 문항 본문에 안 붙는다', () => {
     expect(items[0].stem).not.toContain('tabular');
     expect(items[0].stem).toContain('① $-5$');
+  });
+});
+
+describe('stripWorksheetHeader — 출제본을 일반 파서로 읽을 때 본문 앞 유형 표·출처 줄 걷기', () => {
+  const head = `${chapterTab}\n2010년(2011학년도) 교육청 고3 이과 03월 > 2 [2점]\n`;
+  it('유형 표 + 출처 줄 제거', () => {
+    expect(stripWorksheetHeader(head + '$\log _{5} 3$의 값은?')).toBe('$\log _{5} 3$의 값은?');
+  });
+  it('출처 줄만 있어도 제거', () => {
+    expect(stripWorksheetHeader('EBS 수능특강 수학2 > 15\n본문')).toBe('본문');
+  });
+  it('본문 자료표는 그대로', () => {
+    const data = '\begin{tabular}{|c|c|}\hline $x$ & 1 \\ \hline\end{tabular}\n표를 보고 답하시오.';
+    expect(stripWorksheetHeader(data)).toBe(data);
+  });
+  it('머리 없는 본문은 그대로', () => {
+    expect(stripWorksheetHeader('$a>3$일 때 값은?')).toBe('$a>3$일 때 값은?');
+  });
+  it('출처 줄에서 원래 번호·배점', () => {
+    expect(sourceLineOf(head + '본문')).toEqual({ title: '2010년(2011학년도) 교육청 고3 이과 03월', number: 2, points: 2 });
+  });
+});
+
+describe('stripWorksheetHeader — 다음 문항 머리가 끝에 붙은 경우(시중교재 묶음)', () => {
+  it('끝의 유형 표 + 출처 줄 제거', () => {
+    const c = `본문 $f(a^2)$의 값을 구하시오.\n${chapterTab}\n2025년(2026학년도) 교육청 고2 공통 03월 > 19 [4점]`;
+    expect(stripWorksheetHeader(c)).toBe('본문 $f(a^2)$의 값을 구하시오.');
+  });
+  it('끝의 유형 표만(출처 줄 없음)', () => {
+    expect(stripWorksheetHeader(`본문\n${chapterTab}`)).toBe('본문');
   });
 });

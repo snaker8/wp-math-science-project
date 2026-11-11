@@ -112,6 +112,49 @@ export function parseWorksheetParagraphs(paras: RawPara[]): WorksheetItem[] {
   return items;
 }
 
+/**
+ * 출제본을 일반 적재 파서(parseHml)로 읽으면 각 문항 본문 앞에 「유형 표」와 「출처 줄」이 붙는다.
+ * 문제은행에 넣기 전에 걷어낸다 (시중교재처럼 원본 파일을 못 받고 출제본으로만 받는 자료, 2026-11-11).
+ *   `\begin{tabular}…09 대수…\end{tabular}\n2010년 … 03월 > 2 [2점]\n본문…` → `본문…`
+ * 유형 표가 아닌 표(본문 자료표)는 건드리지 않는다 — 칸이 전부 `NN 이름` 꼴일 때만 유형 표로 본다.
+ */
+export function stripWorksheetHeader(content: string): string {
+  // ★ 머리가 본문 「앞」에 붙는 파일(모의고사 묶음)과, 다음 문항의 머리가 앞 문항 「끝」에 붙는 파일(시중교재)이 둘 다 있다
+  //   (2026-11-11 실측). 위치와 상관없이 유형 표 줄 + 그 바로 뒤 출처 줄을 지운다. 출처 줄 단독은 맨 앞일 때만 —
+  //   본문 줄이 우연히 `… > 3` 꼴일 수 있어 아무 데서나 지우지 않는다.
+  const lines = content.split('\n');
+  const isChapter = (l: string) => {
+    const t = l.trim();
+    if (/^\\begin\{tabular\}[\s\S]*\\end\{tabular\}$/.test(t)) return parseChapterPara(t).length > 0;
+    return false;
+  };
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (isChapter(lines[i])) {
+      if (i + 1 < lines.length && SOURCE_LINE_RE.test(lines[i + 1].trim())) i++;
+      continue;
+    }
+    // 글자로 펼쳐진 유형 경로(`07 공통수학108 부등식…`) + 출처 줄
+    if (/^\d{2} \S/.test(lines[i].trim()) && i + 1 < lines.length && SOURCE_LINE_RE.test(lines[i + 1].trim())) { i++; continue; }
+    out.push(lines[i]);
+  }
+  while (out.length && !out[0].trim()) out.shift();
+  if (out.length && SOURCE_LINE_RE.test(out[0].trim())) out.shift();
+  // 끝 줄 출처 줄(유형 표가 앞 줄 꼬리에 붙어 따로 안 잡힌 경우) — 문제 끝은 「?」·「…시오.」 라 `> N [k점]` 로 끝날 일이 없다
+  while (out.length && !out[out.length - 1].trim()) out.pop();
+  if (out.length > 1 && SOURCE_LINE_RE.test(out[out.length - 1].trim())) out.pop();
+  return out.join('\n').trim();
+}
+
+/** 출처 줄에서 원본 번호·배점만 (출제본 → 문제은행 적재 시 원래 번호를 살린다) */
+export function sourceLineOf(content: string): { title: string; number: number; points: number | null } | null {
+  for (const raw of content.split('\n').slice(0, 4)) {
+    const m = raw.trim().match(SOURCE_LINE_RE);
+    if (m) return { title: m[1].trim(), number: Number(m[2]), points: m[3] != null ? Number(m[3]) : null };
+  }
+  return null;
+}
+
 /** HML 버퍼 → 문항 목록 */
 export function parseWorksheetHml(buf: ArrayBuffer | Buffer): WorksheetItem[] {
   return parseWorksheetParagraphs(__dumpParagraphs(buf));
