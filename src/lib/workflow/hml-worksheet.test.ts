@@ -83,3 +83,17 @@ describe('stripWorksheetHeader — 다음 문항 머리가 끝에 붙은 경우(
     expect(stripWorksheetHeader(`본문\n${chapterTab}`)).toBe('본문');
   });
 });
+
+describe('stripWorksheetHeader — 번호 없는 문항의 출처 줄(교재명 > 꼬리표)', () => {
+  it('교재명을 주면 그 이름으로 시작하는 출처 줄을 지운다', () => {
+    const c = '본문 $x>y$ 일 때 값을 구하시오.\n2025년 봉샘스쿨 올미 공통수학1 > 수행평가 > 변형1';
+    expect(stripWorksheetHeader(c, ['2025년 봉샘스쿨 올미 공통수학1'])).toBe('본문 $x>y$ 일 때 값을 구하시오.');
+  });
+  it('교재명이 없어도 수식 없는 `A > B` 줄은 출처 줄로 지운다(공유 문항은 다른 교재명이 찍힌다)', () => {
+    const c = '본문\n2026년 씨에스엠 기출리버스 수학1 변형편 > 숫자변형 > 2019년 시행 6월 수능 21번 변형';
+    expect(stripWorksheetHeader(c)).toBe('본문');
+  });
+  it('수식 안의 부등호 줄은 그대로', () => {
+    expect(stripWorksheetHeader('조건\n$a > b > 0$ 일 때')).toBe('조건\n$a > b > 0$ 일 때');
+  });
+});

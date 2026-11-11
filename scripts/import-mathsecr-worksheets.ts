@@ -60,6 +60,7 @@ async function main() {
     (JSON.parse(fs.readFileSync(args.mydbs, 'utf-8')) as Array<{ id: number; title: string; paperType: string; questionCount: number }>).map((x) => [x.id, x]),
   );
   const manifest = JSON.parse(fs.readFileSync(args.manifest, 'utf-8')) as { items: Record<string, { folderPath?: string }> };
+  if (args.append === 'true') return appendMain(mydbs);
   const byId = new Map<number, Meta[]>();
   for (const f of fs.readdirSync(args.dir)) {
     const m = f.match(/^tb_(\d+)_(\d+)\.json$/);
@@ -154,6 +155,107 @@ async function main() {
   }
   console.log(JSON.stringify(stat, null, 2));
   if (report.length) console.log(report.join('\n'));
+}
+
+/**
+ * --append: 보충분(tbx_{id}_{k}) 을 이미 들여온 교재 시험지 뒤에 이어 붙인다 (2026-11-11).
+ *   나만의DB 목록은 한 난이도 200문항까지라 못 받은 문항을 question-cells(cursor 페이지)로 찾아 따로 출제해 받았다.
+ *   - 번호: 출처 줄이 이 교재면 그 번호, 아니면(다른 출처가 찍힌 공유 문항) 기존 최대 번호 뒤로
+ *   - 이미 같은 번호가 시험지에 있으면 건너뜀(재실행 안전)
+ *   - 적재는 createExamFromHml 로 임시 시험지에 넣고 exam_problems 를 원래 시험지로 옮긴다(그림 업로드·검증 로직 재사용)
+ *   - 분류용 행(db, 번호, cellId, 난이도, 유형) 을 <dir>/tbx_cells.tsv 에 쓴다 → apply-mathsecr-classifications --cells
+ */
+async function appendMain(mydbs: Map<number, { title: string; paperType: string; questionCount: number }>) {
+  const byId = new Map<number, Meta[]>();
+  for (const f of fs.readdirSync(args.dir)) {
+    const m = f.match(/^tbx_(\d+)_(\d+)\.json$/);
+    if (!m) continue;
+    const meta = JSON.parse(fs.readFileSync(path.join(args.dir, f), 'utf-8')) as Meta;
+    if (meta.hml !== 'done' || meta.saved !== 200) continue;
+    byId.set(meta.id, [...(byId.get(meta.id) || []), meta]);
+  }
+  // 이미 붙인 조각은 다시 안 붙인다 (번호를 새로 매긴 문항은 번호 중복 검사로 못 거른다)
+  const doneFile = path.join(args.dir, 'tbx_done.txt');
+  const doneSet = new Set(fs.existsSync(doneFile) ? fs.readFileSync(doneFile, 'utf-8').split(/\r?\n/).filter(Boolean) : []);
+  for (const [id, ms] of byId) byId.set(id, ms.filter((m) => !doneSet.has(`tbx_${id}_${String(m.k).padStart(2, '0')}`)));
+  const tsv: string[] = [];
+  const stat = { books: 0, appended: 0, skippedSameNo: 0, noExam: 0, mismatch: 0, failed: 0, renumbered: 0 };
+  for (const [id, metas] of [...byId.entries()].sort((a, b) => a[0] - b[0])) {
+    if (ONLY.size && !ONLY.has(id)) continue;
+    const info = mydbs.get(id);
+    if (!info) continue;
+    const title = info.title.trim();
+    const { data: ex } = await sb.from('exams').select('id, description').eq('title', title).is('deleted_at', null).limit(1);
+    const examId = ex?.[0]?.id as string | undefined;
+    if (!examId) { stat.noExam++; console.log(`  시험지 없음 ${title}`); continue; }
+    const { data: links } = await sb.from('exam_problems').select('sequence_number, problem_id').eq('exam_id', examId).limit(5000);
+    const ids = (links || []).map((l) => l.problem_id as string);
+    const have = new Set<number>();
+    for (let i = 0; i < ids.length; i += 300) {
+      const { data } = await sb.from('problems').select('source_number').in('id', ids.slice(i, i + 300));
+      (data || []).forEach((r) => r.source_number != null && have.add(r.source_number as number));
+    }
+    let maxSeq = Math.max(0, ...(links || []).map((l) => l.sequence_number as number));
+    let maxNo = Math.max(0, ...have);
+    const metaFile = path.join(args.dir, `tbx_meta_${id}.json`);
+    const cellInfo = new Map<number, [number, string, string]>();
+    if (fs.existsSync(metaFile)) for (const c of (JSON.parse(fs.readFileSync(metaFile, 'utf-8')).cells as Array<[number, string, string]>)) cellInfo.set(c[0], c);
+
+    const problems: HmlProblem[] = [];
+    let bad = '';
+    for (const m of metas.sort((a, b) => a.k - b.k)) {
+      const parsed = parseHml(fs.readFileSync(path.join(args.dir, `tbx_${id}_${String(m.k).padStart(2, '0')}.hml`)));
+      if (parsed.problems.length !== m.cells.length) { bad = `조각 ${m.k}: 파싱 ${parsed.problems.length} / 담은 ${m.cells.length}`; break; }
+      parsed.problems.forEach((p, i) => {
+        const src = sourceLineOf(p.content);
+        let no = src && src.title.replace(/\s/g, '') === title.replace(/\s/g, '') ? src.number : 0;
+        if (!no || have.has(no)) {
+          if (no && have.has(no)) { stat.skippedSameNo++; return; }
+          no = ++maxNo; stat.renumbered++;
+        }
+        have.add(no); maxNo = Math.max(maxNo, no);
+        const ci = cellInfo.get(m.cells[i][0]);
+        if (ci) tsv.push([id, no, ci[0], ci[1], ci[2]].join('\t'));
+        problems.push({ ...p, number: no, content: stripWorksheetHeader(p.content, [title]) });
+      });
+    }
+    if (bad) { stat.mismatch++; console.log(`  불일치 ${title} — ${bad}`); continue; }
+    if (!metas.length || !problems.length) continue;
+    problems.sort((a, b) => a.number - b.number);
+    if (!COMMIT) { console.log(`  [dry] ${title} +${problems.length}`); stat.books++; stat.appended += problems.length; continue; }
+
+    const tmpTitle = `${title} (보충 ${Date.now().toString(36)})`;
+    const res = await createExamFromHml(sb, { title: tmpTitle, problems, rawLineCount: 0 }, {
+      createdBy: CREATED_BY, instituteId: null, bookGroupId: null, sourceCategory: 'textbook',
+      title: tmpTitle, sourceName: `${title}__db-${id}.hml`, curriculumCodes: [],
+    });
+    if (!res.ok || !res.examId) { stat.failed++; console.log(`  실패 ${title} — ${res.ok ? 'examId 없음' : res.error}`); continue; }
+    const { data: moved } = await sb.from('exam_problems').select('id, sequence_number').eq('exam_id', res.examId);
+    if ((moved || []).length < problems.length) {
+      // 반쪽이면 임시 시험지째 되돌린다
+      const { data: l2 } = await sb.from('exam_problems').select('problem_id').eq('exam_id', res.examId);
+      const pids = (l2 || []).map((l) => l.problem_id as string);
+      if (pids.length) await sb.from('problems').update({ deleted_at: new Date().toISOString() }).in('id', pids);
+      await sb.from('exams').update({ deleted_at: new Date().toISOString() }).eq('id', res.examId);
+      stat.failed++; console.log(`  실패 ${title} — ${(moved || []).length}/${problems.length} 저장, 되돌림`); continue;
+    }
+    for (const r of moved || []) {
+      await sb.from('exam_problems').update({ exam_id: examId, sequence_number: maxSeq + (r.sequence_number as number) }).eq('id', r.id);
+    }
+    maxSeq += (moved || []).length;
+    await sb.from('exams').delete().eq('id', res.examId);
+    const total = maxSeq;
+    await sb.from('exams').update({
+      description: total >= info.questionCount - 2
+        ? `수학비서 출제본 적재 — ${total}문항`
+        : `수학비서 출제본 적재 — 원본 ${info.questionCount}문항 중 ${total}문항`,
+    }).eq('id', examId);
+    stat.books++; stat.appended += problems.length;
+    console.log(`  ✓ ${title} +${problems.length} → ${total}/${info.questionCount}`);
+    fs.appendFileSync(doneFile, metas.map((m) => `tbx_${id}_${String(m.k).padStart(2, '0')}`).join('\n') + '\n');
+  }
+  if (tsv.length) fs.appendFileSync(path.join(args.dir, 'tbx_cells.tsv'), tsv.join('\n') + '\n');
+  console.log(JSON.stringify(stat, null, 2));
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

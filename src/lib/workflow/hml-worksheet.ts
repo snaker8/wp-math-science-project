@@ -118,7 +118,22 @@ export function parseWorksheetParagraphs(paras: RawPara[]): WorksheetItem[] {
  *   `\begin{tabular}…09 대수…\end{tabular}\n2010년 … 03월 > 2 [2점]\n본문…` → `본문…`
  * 유형 표가 아닌 표(본문 자료표)는 건드리지 않는다 — 칸이 전부 `NN 이름` 꼴일 때만 유형 표로 본다.
  */
-export function stripWorksheetHeader(content: string): string {
+export function stripWorksheetHeader(content: string, sourceTitles: string[] = []): string {
+  // 번호 없는 문항(교재의 「수행평가 > 변형1」 같은 꼬리표)은 출처 줄이 `교재명 > 수행평가 > 변형1` 이라
+  // `> 번호` 규칙에 안 걸린다(2026-11-11 실측). 교재명을 알면 그 이름으로 시작하는 줄을 출처 줄로 본다.
+  const titled = sourceTitles.map((t) => t.replace(/\s+/g, '')).filter(Boolean);
+  content = content
+    .split('\n')
+    .filter((l) => {
+      const n = l.replace(/\s+/g, '');
+      if (titled.some((t) => n.startsWith(t + '>'))) return false;
+      // ★ `A > B > C` 꼴이고 수식($)이 없는 줄 = 출처 줄. 교재 묶음은 출처가 다른 교재명(공유 문항)으로도 찍혀
+      //   제목만으로는 못 거른다. 본문의 부등호는 $…$ 안에 있다 — 시중교재 25,372문항 실측에서 이 꼴의 본문 줄 0
+      //   (출처 줄 14,959개 전부 이 규칙에 걸림, 2026-11-11).
+      if (/\s>\s/.test(l) && !l.includes('$')) return false;
+      return true;
+    })
+    .join('\n');
   // ★ 머리가 본문 「앞」에 붙는 파일(모의고사 묶음)과, 다음 문항의 머리가 앞 문항 「끝」에 붙는 파일(시중교재)이 둘 다 있다
   //   (2026-11-11 실측). 위치와 상관없이 유형 표 줄 + 그 바로 뒤 출처 줄을 지운다. 출처 줄 단독은 맨 앞일 때만 —
   //   본문 줄이 우연히 `… > 3` 꼴일 수 있어 아무 데서나 지우지 않는다.
