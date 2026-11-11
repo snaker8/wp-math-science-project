@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeObjectiveAnswer } from '@/lib/validation/objective-answer';
 import type { HmlParseResult } from './hml-parser';
 import { verifyHmlProblem } from './hml-verify';
+import { materializeSolution } from './solution-images';
 import { findAutoFolderForCurriculum } from '@/lib/utils/auto-folder';
 import { parseExamTitleMeta } from './exam-title-meta';
 import { findDuplicateExams, describeIdentity, examIdentityFromTitle } from './exam-duplicate-guard';
@@ -288,7 +289,10 @@ export async function createExamFromHml(
       .from('problems')
       .insert({
         content_latex: contentLatex,
-        solution_latex: '',
+        // ★ 2026-11-11: 원본 미주의 [해설] 을 버리지 않고 저장 (모의고사 원본 등). 없으면 '' 그대로.
+        solution_latex: p.solution
+          ? await materializeSolution(p.solution, p.solutionImagesBase64 || [], (d, gi) => uploadDataUrl(d, `p${p.number}-sol${gi}`))
+          : '',
         answer_json,
         images,
         status: 'PENDING_REVIEW',
