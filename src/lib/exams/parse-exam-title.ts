@@ -199,7 +199,7 @@ export function buildFacetOptions(parsedList: Array<ParsedExamTitle | null>): Fa
 /** 과목 이름 정규화 — 공백·괄호 제거, 로마 숫자 → 아라비아 숫자, 줄임말 풀기 */
 function normalizeSubject(s: string): string {
   let t = s.toLowerCase().replace(/[\s()（）]/g, '')
-    .replace(/Ⅰ/g, '1').replace(/Ⅱ/g, '2')
+    .replace(/[Ⅰⅰ]/g, '1').replace(/[Ⅱⅱ]/g, '2') // toLowerCase 가 Ⅱ 를 ⅱ 로 바꾼다 — 둘 다 받는다
     .replace(/ii$/, '2').replace(/i$/, '1');
   const SHORT: Record<string, string> = {
     '수1': '수학1', '수2': '수학2', '미적1': '미적분1', '미적2': '미적분2', '미적': '미적분',
