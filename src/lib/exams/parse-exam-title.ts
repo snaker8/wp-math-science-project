@@ -276,3 +276,23 @@ export function matchesExamSearch(title: string | null | undefined, query: strin
   const subject = titleSubject(raw);
   return tokens.every((tk) => tokenMatches(tk, flatTitle, parsed, subject));
 }
+
+// ── 과정(과목) ─────────────────────────────────────────────────────────────
+
+/** 묶음에 없는 과목 — 이름이 바뀌지 않은 것 */
+const SINGLE_COURSES = ['확률과통계', '기하'];
+
+/**
+ * 시험지 제목 → 과정 이름(2022 개정 기준). `24-2-1-F 사직고 수학2` → '미적분1'.
+ * 출제 화면에서 「학교기출 → 과정」으로 좁힐 때 쓴다 — 옛 시험지도 지금 가르치는 과목 이름으로 묶인다.
+ * 과목을 알 수 없으면 null (중등 `수학`, 고1 `수학` 처럼 한 과정으로 못 박을 수 없는 제목 포함).
+ */
+export function examCourse(title: string | null | undefined): string | null {
+  const subject = titleSubject(title || '');
+  if (!subject) return null;
+  const hit = (a: string) => subject === a || (subject.startsWith(a) && !/^\d/.test(subject.slice(a.length)));
+  // 긴 이름부터 본다 — '수학1' 이 '공통수학1' 보다 먼저 걸리지 않게(여긴 startsWith 라 안 걸리지만 순서를 고정해 둔다)
+  for (const g of SUBJECT_GROUPS) if (g.some(hit)) return g[0];
+  for (const s of SINGLE_COURSES) if (hit(s)) return s;
+  return null;
+}
