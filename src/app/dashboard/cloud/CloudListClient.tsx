@@ -59,6 +59,7 @@ import { ExamFacetBar } from '@/components/cloud/ExamFacetBar';
 import {
   parseExamTitle,
   matchesFacets,
+  matchesExamSearch,
   hasAnyFacet,
   buildFacetOptions,
   EMPTY_FACET_SELECTION,
@@ -1501,13 +1502,11 @@ export default function CloudPage() {
       // ★ 검색은 "현재 선택 폴더(+하위) 범위 안"에서만 (2026-06-12 수정).
       //   기존엔 북그룹 필터를 무시하고 전체 풀에서 검색 → 3학년 폴더 선택 후 검색해도 2학년까지
       //   나오던 사고. 전체 검색이 필요하면 좌측에서 '전체 시험지' 선택. (공백 제거·대소문자 무시)
-      const q = searchQuery.toLowerCase().replace(/\s+/g, '');
       // ★ exams 가 아니라 result 에서 걸러야 한다 — 조건(패싯)과 교집합이 되도록.
       //   exams 로 시작하면 검색을 켜는 순간 앞의 조건이 통째로 무시된다.
-      result = result.filter((e) => {
-        const name = (e.fileName || '').toLowerCase().replace(/\s+/g, '');
-        return name.includes(q);
-      });
+      // ★ 글자 포함만 보면 「미적분1 기말」이 0건 — 기말은 제목에 F 로만 있고, 옛 수학2 시험지가
+      //   새 교육과정에선 미적분1 이다. 뜻까지 본다(matchesExamSearch, 2026-11-14).
+      result = result.filter((e) => matchesExamSearch(e.fileName, searchQuery));
     }
     result = [...result].sort((a, b) => {
       let cmp = 0;

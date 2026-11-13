@@ -186,3 +186,93 @@ export function buildFacetOptions(parsedList: Array<ParsedExamTitle | null>): Fa
     unparsed: parsedList.filter((p) => !p).length,
   };
 }
+
+// ── 검색 ───────────────────────────────────────────────────────────────────
+//
+// ★ 배경 (2026-11-14): 제목은 `24-2-1-F 사직고 수학2` 인데 대표는 「미적분1 기말」로 찾는다.
+//   · 기말/중간은 제목에 F/M 한 글자로만 있다 → 「기말」 검색 0건.
+//   · 2022 개정에서 과목 이름이 바뀌었다(수학2 → 미적분1). 수학비서는 옛 시험지를 새 이름으로
+//     보여 주는데 우리는 시험 당시 제목 그대로라 「미적분1」로 찾으면 올해 치른 몇 장만 나왔다.
+//   → 검색어를 띄어쓰기로 나눠 토막마다 (글자 포함) 또는 (뜻 일치)를 본다. 토막끼리는 AND.
+//   기존 검색(공백 지운 글자 포함)에 걸리던 것은 전부 그대로 걸린다 — 결과가 늘기만 한다.
+
+/** 과목 이름 정규화 — 공백·괄호 제거, 로마 숫자 → 아라비아 숫자, 줄임말 풀기 */
+function normalizeSubject(s: string): string {
+  let t = s.toLowerCase().replace(/[\s()（）]/g, '')
+    .replace(/Ⅰ/g, '1').replace(/Ⅱ/g, '2')
+    .replace(/ii$/, '2').replace(/i$/, '1');
+  const SHORT: Record<string, string> = {
+    '수1': '수학1', '수2': '수학2', '미적1': '미적분1', '미적2': '미적분2', '미적': '미적분',
+    '공수1': '공통수학1', '공수2': '공통수학2', '수상': '수학상', '수하': '수학하',
+    '확통': '확률과통계',
+  };
+  if (SHORT[t]) t = SHORT[t];
+  return t;
+}
+
+/** 2015 개정 ↔ 2022 개정 — 같은 내용을 다루는 과목끼리 묶는다 */
+const SUBJECT_GROUPS: string[][] = [
+  ['공통수학1', '수학상'],
+  ['공통수학2', '수학하'],
+  ['대수', '수학1'],
+  ['미적분1', '수학2'],
+  ['미적분2', '미적분'],
+];
+
+function subjectAliases(token: string): string[] | null {
+  const n = normalizeSubject(token);
+  const g = SUBJECT_GROUPS.find((grp) => grp.includes(n));
+  if (g) return g;
+  // 묶음에 없는 줄임말(확통 등)은 풀어 쓴 이름 하나로
+  return n !== token.toLowerCase() ? [n] : null;
+}
+
+/** 제목에서 과목 부분만 — 접두 코드와 학교명을 뗀 나머지 */
+function titleSubject(title: string): string | null {
+  const t = title.trim();
+  const m = t.match(TITLE_RE);
+  if (!m) return null;
+  return normalizeSubject(t.slice(m[0].length));
+}
+
+function tokenMatches(token: string, flatTitle: string, parsed: ParsedExamTitle | null, subject: string | null): boolean {
+  const tk = token.toLowerCase();
+  if (flatTitle.includes(tk)) return true;
+
+  if (parsed) {
+    if (/^기말(고사)?$/.test(tk)) return parsed.kind === 'F';
+    if (/^중간(고사)?$/.test(tk)) return parsed.kind === 'M';
+    let m = tk.match(/^([12])학기$/);
+    if (m) return parsed.term === m[1];
+    m = tk.match(/^(중|고)([1-3])$/);
+    if (m) return parsed.schoolLevel === m[1] && parsed.grade === m[2];
+    m = tk.match(/^(?:20)?(\d{2})년(?:도)?$/) || tk.match(/^20(\d{2})$/);
+    if (m) return parsed.year === m[1];
+  }
+
+  const aliases = subjectAliases(tk);
+  if (aliases) {
+    // 과목을 뽑을 수 있으면 정확히 비교한다 — 글자 포함으로 보면 「수학2」가 「공통수학2」에도 걸린다.
+    //   뒤에 말이 붙은 제목(`수학2 재시험`)도 받되, 숫자가 이어지면 다른 과목이다(미적분 ≠ 미적분1).
+    if (subject !== null) {
+      return aliases.some((a) => subject === a || (subject.startsWith(a) && !/^\d/.test(subject.slice(a.length))));
+    }
+    const flatNorm = normalizeSubject(flatTitle);
+    return aliases.some((a) => flatNorm.includes(a));
+  }
+  return false;
+}
+
+/**
+ * 클라우드 목록 검색. 검색어가 비면 통과.
+ * 토막마다: 제목에 글자가 있거나 / 기말·중간·학기·학년·연도·과목(옛↔새 이름)의 뜻이 맞으면 통과.
+ */
+export function matchesExamSearch(title: string | null | undefined, query: string): boolean {
+  const tokens = query.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const raw = title || '';
+  const flatTitle = raw.toLowerCase().replace(/\s+/g, '');
+  const parsed = parseExamTitle(raw);
+  const subject = titleSubject(raw);
+  return tokens.every((tk) => tokenMatches(tk, flatTitle, parsed, subject));
+}
