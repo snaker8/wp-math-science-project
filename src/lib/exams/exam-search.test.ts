@@ -43,6 +43,10 @@ describe('matchesExamSearch — 뜻으로 찾기', () => {
     expect(hits('2024년 2학기')).toEqual(['su2M', 'mi']);
     expect(hits('고1')).toEqual(['gong2', 'ha']);
   });
+  it('로마 숫자 과목명(수학Ⅱ)도 같은 과목', () => {
+    expect(matchesExamSearch('25-2-2-M 충렬고 수학Ⅱ', '미적분1 중간')).toBe(true);
+    expect(matchesExamSearch('25-2-1-M 충렬고 수학Ⅰ', '대수')).toBe(true);
+  });
   it('예전 방식(공백 지운 글자 포함)은 그대로', () => {
     expect(hits('사직고수학2')).toEqual(['su2F']);
     expect(hits('쎈 중2')).toEqual(['book']);
