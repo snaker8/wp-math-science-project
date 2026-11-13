@@ -41,6 +41,7 @@ import { truncateLatexPreview } from '@/lib/utils/latex-preview';
 import { MathsecrTreePicker } from '@/components/papers/MathsecrTreePicker';
 import { extractSchoolName, classifySchoolLevel } from '@/lib/utils/school-extract';
 import { parseExamTitleMeta } from '@/lib/workflow/exam-title-meta';
+import { examCourse } from '@/lib/exams/parse-exam-title';
 
 // ★ 카드 미리보기 — [도형]·[도형:line:35%] 마커는 그림 자리표시라 글자로 보이면 안 된다 (2026-10-25 부흥중 카드).
 //   그림 자체는 편성·인쇄 화면에서 렌더된다. 여기선 걷어내고 "그림" 표시만.
@@ -281,6 +282,12 @@ export default function ExamCreatePage() {
   // ★ 카드 목록은 스크롤에 맞춰 나눠 그린다 — 전체 학교 풀(수천 건)을 한 번에 KaTeX 로 그리면 화면이 몇 초 멈춘다.
   const [schoolRenderLimit, setSchoolRenderLimit] = useState(SCHOOL_RENDER_STEP);
   const ALL_SCHOOLS = '__ALL__';
+  // ★ 여러 학교 (2026-11-14 대표 「여러 학교 과정별로 선택해 뽑을 수 있게」) — 왼쪽 목록의 체크로 고른 학교들이 한 풀.
+  //   pickedSchools 가 차 있으면 selectedSchool 은 MULTI_SCHOOLS 센티널.
+  const MULTI_SCHOOLS = '__MULTI__';
+  const [pickedSchools, setPickedSchools] = useState<Set<string>>(new Set());
+  // ★ 과정 (제목의 과목 → 2022 개정 이름. 수학2 시험지 = 미적분1). 빈값 = 전체.
+  const [filterCourse, setFilterCourse] = useState<string>('');
   const [schoolTypeNames, setSchoolTypeNames] = useState<Map<string, string>>(new Map()); // 코드 → 이름 (/api/mathsecr/tree)
   const [schoolQuery, setSchoolQuery] = useState('');
 
@@ -460,7 +467,7 @@ export default function ExamCreatePage() {
   }, [activeTab]);
 
   // ★ 학교기출 — 4-필터를 통과한 시험지 (좌측 학교 목록·중간 시험지 목록·풀 범위가 모두 이 하나를 본다)
-  const filteredSchoolExams = useMemo(() => schoolExams.filter((ex) => {
+  const schoolExamsPreCourse = useMemo(() => schoolExams.filter((ex) => {
     // 1) 검색 키워드
     if (schoolQuery.trim()) {
       const q = schoolQuery.trim().toLowerCase();
@@ -502,14 +509,26 @@ export default function ExamCreatePage() {
     }
     return true;
   }), [schoolExams, schoolQuery, filterSchoolLevel, filterGradeSemester, filterExamRound, filterChapter, selectedSchoolNames]);
+  // 과정 후보 — 다른 필터를 통과한 시험지에 실제로 있는 과정만 (건수 포함)
+  const courseOptions = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const ex of schoolExamsPreCourse) { const c = examCourse(ex.title); if (c) m.set(c, (m.get(c) || 0) + 1); }
+    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0], 'ko'));
+  }, [schoolExamsPreCourse]);
+  const filteredSchoolExams = useMemo(
+    () => (filterCourse ? schoolExamsPreCourse.filter((ex) => examCourse(ex.title) === filterCourse) : schoolExamsPreCourse),
+    [schoolExamsPreCourse, filterCourse],
+  );
 
   // 풀 범위 = 선택한 학교의 (필터 통과) 시험지 전부, 연도를 골랐으면 그 시험지만
   const schoolScopeExamIds = useMemo(() => {
     if (!selectedSchool) return [] as string[];
-    const all = (selectedSchool === ALL_SCHOOLS ? filteredSchoolExams : filteredSchoolExams.filter((ex) => (ex.school || '(학교 미상)') === selectedSchool)).map((ex) => ex.id);
+    const all = (selectedSchool === ALL_SCHOOLS ? filteredSchoolExams
+      : selectedSchool === MULTI_SCHOOLS ? filteredSchoolExams.filter((ex) => pickedSchools.has(ex.school || '(학교 미상)'))
+      : filteredSchoolExams.filter((ex) => (ex.school || '(학교 미상)') === selectedSchool)).map((ex) => ex.id);
     if (selectedSchoolExamIds.size === 0) return all;
     return all.filter((id) => selectedSchoolExamIds.has(id));
-  }, [filteredSchoolExams, selectedSchool, selectedSchoolExamIds]);
+  }, [filteredSchoolExams, selectedSchool, selectedSchoolExamIds, pickedSchools]);
   // 범위·단원·유형이 바뀌면 처음 묶음부터 다시 그린다
   useEffect(() => { setSchoolRenderLimit(SCHOOL_RENDER_STEP); }, [schoolScopeExamIds, schoolUnitFilters, schoolTypeFilters]);
 
@@ -533,9 +552,9 @@ export default function ExamCreatePage() {
     setSchoolProblemsLoading(true);
     (async () => {
       try {
-        // 4개씩 병렬 — 한 학교 시험지는 많아야 수십 장
-        for (let i = 0; i < missing.length; i += 4) {
-          await Promise.all(missing.slice(i, i + 4).map(async (examId) => {
+        // 8개씩 병렬 — 전체 학교×과정이면 수백 장이라 4개씩으론 오래 걸린다
+        for (let i = 0; i < missing.length; i += 8) {
+          await Promise.all(missing.slice(i, i + 8).map(async (examId) => {
             const res = await fetch(`/api/exams/${examId}`, { cache: 'no-store' });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -1152,8 +1171,14 @@ export default function ExamCreatePage() {
             if (order[la] !== order[lb]) return order[la] - order[lb];
             return a.localeCompare(b, 'ko');
           });
-          const examsForSelected = !selectedSchool ? [] : selectedSchool === ALL_SCHOOLS ? filteredExams : bySchool.get(selectedSchool) || [];
-          const schoolLabel = selectedSchool === ALL_SCHOOLS ? `전체 학교 ${sortedSchools.length}개교` : selectedSchool;
+          const pickedList = sortedSchools.filter((sch) => pickedSchools.has(sch));
+          const examsForSelected = !selectedSchool ? [] : selectedSchool === ALL_SCHOOLS ? filteredExams
+            : selectedSchool === MULTI_SCHOOLS ? filteredExams.filter((ex) => pickedSchools.has(ex.school || '(학교 미상)'))
+            : bySchool.get(selectedSchool) || [];
+          const schoolLabel = selectedSchool === ALL_SCHOOLS ? `전체 학교 ${sortedSchools.length}개교`
+            : selectedSchool === MULTI_SCHOOLS ? (pickedList.length <= 2 ? pickedList.join('·') : `${pickedList[0]} 외 ${pickedList.length - 1}개교`)
+            : selectedSchool;
+          const resetSchoolNarrowing = () => { setSelectedSchoolExamIds(new Set()); setSchoolUnitFilters(new Set()); setSchoolTypeFilters(new Set()); };
           // 카드 배지 — M=중간·F=기말 (대표: "m 은 중간 f 기말이다"). exam_round 가 비면 제목 규격에서
           const roundOf = (ex: SchoolExam) => ex.exam_round || ({ M: '중간', F: '기말' } as Record<string, string>)[(ex.title.match(/^\d\d-\d-\d-([MF])\b/) || [])[1] || ''] || '';
           // ★ PR-3 4-필터 옵션
@@ -1241,6 +1266,25 @@ export default function ExamCreatePage() {
                     <option key={g || 'all'} value={g}>{g || '학년·학기 전체'}</option>
                   ))}
                 </select>
+                {/* ★ 과정 — 고르면 학교를 안 눌러도 전체 학교가 풀이 된다(학교기출 → 과정 → 단원) */}
+                {(courseOptions.length > 0 || filterCourse) && (
+                  <select
+                    value={filterCourse}
+                    onChange={(e) => {
+                      setFilterCourse(e.target.value);
+                      resetSchoolNarrowing();
+                      if (e.target.value && !selectedSchool) setSelectedSchool(ALL_SCHOOLS);
+                    }}
+                    title="시험지 과목 기준 — 옛 수학2 시험지는 미적분1, 수학1 은 대수로 묶입니다"
+                    className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-content-primary focus:border-white/25 focus:outline-none"
+                  >
+                    <option value="">과정 전체</option>
+                    {filterCourse && !courseOptions.some(([c]) => c === filterCourse) && <option value={filterCourse}>{filterCourse} 0</option>}
+                    {courseOptions.map(([c, n]) => (
+                      <option key={c} value={c}>{c} {n}</option>
+                    ))}
+                  </select>
+                )}
                 <button
                   type="button"
                   onClick={() => setRegionPickerOpen(true)}
@@ -1272,7 +1316,7 @@ export default function ExamCreatePage() {
                     ))}
                   </select>
                 )}
-                {(filterSchoolLevel !== '전체' || filterGradeSemester || filterExamRound || filterChapter || selectedSchoolNames.size > 0) && (
+                {(filterSchoolLevel !== '전체' || filterGradeSemester || filterExamRound || filterChapter || filterCourse || selectedSchoolNames.size > 0) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1280,6 +1324,7 @@ export default function ExamCreatePage() {
                       setFilterGradeSemester('');
                       setFilterExamRound('');
                       setFilterChapter('');
+                      setFilterCourse('');
                       setSelectedSchoolNames(new Set());
                     }}
                     className="ml-auto text-zinc-400 hover:text-rose-300 underline"
@@ -1336,7 +1381,7 @@ export default function ExamCreatePage() {
                     <li>
                       <button
                         type="button"
-                        onClick={() => { setSelectedSchool(ALL_SCHOOLS); setSelectedSchoolExamIds(new Set()); setSchoolUnitFilters(new Set()); setSchoolTypeFilters(new Set()); }}
+                        onClick={() => { setSelectedSchool(ALL_SCHOOLS); setPickedSchools(new Set()); resetSchoolNarrowing(); }}
                         className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                           selectedSchool === ALL_SCHOOLS ? 'bg-white/[.08] text-content-primary' : 'text-zinc-300 hover:bg-white/5'
                         }`}
@@ -1348,18 +1393,36 @@ export default function ExamCreatePage() {
                     {sortedSchools.map((sch) => {
                       const count = bySchool.get(sch)!.length;
                       const level = classifySchoolLevel(sch === '(학교 미상)' ? null : sch);
-                      const isSelected = selectedSchool === sch;
+                      const isPicked = pickedSchools.has(sch);
+                      const isSelected = selectedSchool === sch || (selectedSchool === MULTI_SCHOOLS && isPicked);
                       return (
-                        <li key={sch}>
+                        <li key={sch} className="flex items-center gap-1">
+                          {/* 체크 = 여러 학교를 한 풀로. 이름을 누르면 그 학교 하나만. */}
+                          <button
+                            type="button"
+                            title={isPicked ? '이 학교 빼기' : '이 학교도 함께 (여러 학교 선택)'}
+                            aria-pressed={isPicked}
+                            onClick={() => {
+                              const next = new Set(pickedSchools);
+                              // 한 학교만 보던 중이면 그 학교도 함께 담는다
+                              if (selectedSchool && selectedSchool !== ALL_SCHOOLS && selectedSchool !== MULTI_SCHOOLS) next.add(selectedSchool);
+                              if (next.has(sch)) next.delete(sch); else next.add(sch);
+                              setPickedSchools(next);
+                              setSelectedSchool(next.size > 0 ? MULTI_SCHOOLS : null);
+                              resetSchoolNarrowing();
+                            }}
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] leading-none ${isPicked ? 'border-white/[.35] bg-white/[.12] text-content-primary' : 'border-zinc-600 text-transparent hover:border-zinc-400'}`}
+                          >
+                            ✓
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
                               setSelectedSchool(sch);
-                              setSelectedSchoolExamIds(new Set()); // 학교 바꾸면 전체 연도부터
-                              setSchoolUnitFilters(new Set());
-                              setSchoolTypeFilters(new Set());
+                              setPickedSchools(new Set());
+                              resetSchoolNarrowing(); // 학교 바꾸면 전체 연도부터
                             }}
-                            className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
+                            className={`min-w-0 flex-1 flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
                               isSelected
                                 ? 'bg-white/[.08] text-content-primary'
                                 : 'text-zinc-300 hover:bg-white/5'
@@ -1446,7 +1509,7 @@ export default function ExamCreatePage() {
                                   </span>
                                 )}
                                 {ex.exam_year && <span className="text-[10px] text-zinc-500">{ex.exam_year}년{ex.semester ? ` ${ex.semester}학기` : ''}</span>}
-                                {selectedSchool === ALL_SCHOOLS && <span className="ml-auto text-[10px] text-zinc-500 truncate">{ex.school}</span>}
+                                {(selectedSchool === ALL_SCHOOLS || selectedSchool === MULTI_SCHOOLS) && <span className="ml-auto text-[10px] text-zinc-500 truncate">{ex.school}</span>}
                               </div>
                               <div className="text-xs font-semibold text-content-primary truncate">{ex.title}</div>
                             </button>

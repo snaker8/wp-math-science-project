@@ -52,3 +52,26 @@ describe('matchesExamSearch — 뜻으로 찾기', () => {
     expect(hits('쎈 중2')).toEqual(['book']);
   });
 });
+
+import { examCourse } from './parse-exam-title';
+
+describe('examCourse — 제목 → 2022 개정 과정 이름', () => {
+  it('옛 이름은 새 이름으로', () => {
+    expect(examCourse('24-2-1-F 사직고 수학2')).toBe('미적분1');
+    expect(examCourse('25-2-2-M 충렬고 수학Ⅱ')).toBe('미적분1');
+    expect(examCourse('24-2-1-M 사직고 수학1')).toBe('대수');
+    expect(examCourse('24-2-2-F 해운대고 미적분')).toBe('미적분2');
+    expect(examCourse('19-1-2-F 현대고 수학하')).toBe('공통수학2');
+    expect(examCourse('25-2-1-M 경남고 수2')).toBe('미적분1');
+  });
+  it('새 이름·바뀌지 않은 이름은 그대로', () => {
+    expect(examCourse('26-2-1-F 서여고 미적분1')).toBe('미적분1');
+    expect(examCourse('25-1-2-F 양운고 공통수학2')).toBe('공통수학2');
+    expect(examCourse('24-2-1-F 신도고 확률과통계')).toBe('확률과통계');
+    expect(examCourse('24-2-1-F 사직고 수학2 (서술형)')).toBe('미적분1');
+  });
+  it('한 과정으로 못 박을 수 없으면 null', () => {
+    expect(examCourse('25-3-1-F 이사벨중 수학')).toBeNull();
+    expect(examCourse('쎈 중2-1')).toBeNull();
+  });
+});
