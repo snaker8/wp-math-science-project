@@ -285,6 +285,7 @@ export default function ExamCreatePage() {
   // ★ 여러 학교 (2026-11-14 대표 「여러 학교 과정별로 선택해 뽑을 수 있게」) — 왼쪽 목록의 체크로 고른 학교들이 한 풀.
   //   pickedSchools 가 차 있으면 selectedSchool 은 MULTI_SCHOOLS 센티널.
   const MULTI_SCHOOLS = '__MULTI__';
+  const BUNDLE_PRINT_MAX = 40; // class/[classId]/print 의 MAX_EXAMS 와 같게
   const [pickedSchools, setPickedSchools] = useState<Set<string>>(new Set());
   // ★ 과정 (제목의 과목 → 2022 개정 이름. 수학2 시험지 = 미적분1). 빈값 = 전체.
   const [filterCourse, setFilterCourse] = useState<string>('');
@@ -1461,6 +1462,26 @@ export default function ExamCreatePage() {
                         전체 연도
                       </button>
                     </div>
+                    {/* ★ 원본 묶음 출력 (2026-11-14 대표 「묶음 출력도 옵션으로」) — 문항을 한 권으로 합치지 않고
+                        고른 시험지를 원본 그대로 한 번에 인쇄. 반 허브의 일괄 인쇄 화면(ExamPaperView)을 그대로 쓴다. */}
+                    {(() => {
+                      const n = schoolScopeExamIds.length;
+                      const over = n > BUNDLE_PRINT_MAX;
+                      return (
+                        <button
+                          type="button"
+                          disabled={n === 0 || over}
+                          title={over ? `한 번에 ${BUNDLE_PRINT_MAX}장까지 — 과정·회차·학교나 시험지 체크로 줄여 주세요` : '고른 시험지를 원본 그대로 한 번에 인쇄 (새 탭)'}
+                          onClick={() => {
+                            const qs = new URLSearchParams({ exams: schoolScopeExamIds.join(','), title: `${schoolLabel}${filterCourse ? ` ${filterCourse}` : ''} 원본`, back: '/dashboard/exam-create' });
+                            window.open(`/dashboard/class/_/print?${qs.toString()}`, '_blank', 'noopener');
+                          }}
+                          className="mb-2 w-full rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 transition-colors hover:border-zinc-500 hover:text-content-primary disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          원본 묶음 출력 {n}장{over ? ` (최대 ${BUNDLE_PRINT_MAX}장)` : ''}
+                        </button>
+                      );
+                    })()}
                     {/* ★ 중간/기말 토글 (대표 「중간 기말도 선택가능하게」) — 상단 회차 필터와 같은 값을 쓴다 */}
                     <div className="mb-2 flex items-center gap-1 rounded-lg border border-zinc-800 p-0.5 w-fit">
                       {([['', '전체'], ['중간', '중간'], ['기말', '기말']] as Array<[string, string]>).map(([v, label]) => (
