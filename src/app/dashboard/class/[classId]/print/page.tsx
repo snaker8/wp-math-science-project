@@ -59,6 +59,9 @@ function BatchPrintInner() {
   const sp = useSearchParams();
   const classId = params?.classId ?? '';
   const title = sp.get('title') || '시험지 출력';
+  // 출제(학교기출) 「원본 묶음 출력」에서 들어오면 반이 없다 — back 으로 돌아갈 곳을 받는다(사이트 안 경로만)
+  const backRaw = sp.get('back') || '';
+  const back = /^\/dashboard\/[\w\-/]*$/.test(backRaw) ? backRaw : '';
   const examIds = useMemo(
     () => Array.from(new Set((sp.get('exams') || '').split(',').map((s) => s.trim()).filter((s) => /^[0-9a-f-]{36}$/i.test(s)))).slice(0, MAX_EXAMS),
     [sp],
@@ -95,8 +98,8 @@ function BatchPrintInner() {
     <div className="min-h-screen bg-surface-base">
       <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-white/10 bg-surface-base/95 px-4 py-2.5 backdrop-blur">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href={`/dashboard/class/${classId}`} className="inline-flex items-center gap-1 text-sm text-content-tertiary hover:text-content-primary">
-            <ArrowLeft className="h-4 w-4" /> 반 허브
+          <Link href={back || `/dashboard/class/${classId}`} className="inline-flex items-center gap-1 text-sm text-content-tertiary hover:text-content-primary">
+            <ArrowLeft className="h-4 w-4" /> {back ? '출제' : '반 허브'}
           </Link>
           <h1 className="truncate text-sm font-semibold text-content-primary">{title}</h1>
           <span className="shrink-0 text-xs tabular-nums text-content-tertiary">시험지 {examIds.length}장</span>
