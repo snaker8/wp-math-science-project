@@ -218,6 +218,15 @@
 .math-content .katex .mtable .col-align-l .mfrac {
   font-size: 1em;
 }
+/* ★ 본문 줄 안의 분수가 위아래 줄에서 맞닿던 것 (2026-11-16, 카드뷰 실측).
+   KaTeX 는 분수 높이에 딱 맞춰 줄 상자를 잡아서, 분수가 든 줄이 연달아 오면 윗줄 분모와
+   아랫줄 분자 사이 여백이 0 이 된다. 분수 상자에 위아래 0.14em 을 줘 그 줄만 살짝 벌린다.
+   - cases·행렬(.mtable) 안 분수 제외 — 행이 절대위치라 여기서 건드리면 다시 겹친다(#23).
+   - 분수 속 분수 제외(바깥 것만).
+   - 인쇄 지면에도 같이 적용(대표 「인쇄물도 당연히 겹친다」) — 측정 래퍼도 같은 전역 CSS 라 측정↔렌더는 맞는다. */
+.katex .mfrac:not(.mtable .mfrac):not(.mfrac .mfrac) {
+  padding-block: 0.14em;
+}
 .katex .base {
   vertical-align: baseline;
 }
