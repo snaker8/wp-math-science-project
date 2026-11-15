@@ -137,11 +137,15 @@ export async function GET(request: NextRequest) {
     const difficultyMap = new Map<string, { low: number; mid: number; high: number; total: number }>();
     if (examIds.length > 0) {
       try {
-        const { data: dist, error } = await supabaseAdmin
-          .rpc('exam_difficulty_distribution', { p_exam_ids: examIds });
-        if (error) {
-          console.warn('[API/exams] difficulty RPC 실패:', error.message);
-        } else {
+        // ★ 500장씩 나눠 부른다 (2026-11-16) — RPC 결과도 1,000행에서 조용히 잘린다.
+        //   시험지가 2,600장을 넘으면서 뒤쪽 1,470장의 바가 사라졌다(센텀여고·해강고 25-1-2-F).
+        const CHUNK = 500;
+        const chunks: string[][] = [];
+        for (let i = 0; i < examIds.length; i += CHUNK) chunks.push(examIds.slice(i, i + CHUNK));
+        const results = await Promise.all(chunks.map((ids) =>
+          supabaseAdmin!.rpc('exam_difficulty_distribution', { p_exam_ids: ids })));
+        for (const { data: dist, error } of results) {
+          if (error) { console.warn('[API/exams] difficulty RPC 실패:', error.message); continue; }
           for (const r of (dist || []) as Array<{ exam_id: string; low: number; mid: number; high: number; total: number }>) {
             if (r.total > 0) difficultyMap.set(r.exam_id, { low: r.low, mid: r.mid, high: r.high, total: r.total });
           }
