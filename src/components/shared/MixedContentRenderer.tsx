@@ -10,6 +10,7 @@ import katex from 'katex';
 import { stripDollarsInsideMathEnv } from './math-env-dollar';
 import { wrapBareLatex } from './wrap-bare-latex';
 import { stripDollarBeforeEnv, stripDollarAfterEnv } from './env-dollar-cleanup';
+import { absorbCasesTrailingRemark } from './cases-trailing-remark';
 import { MathRenderer } from './MathRenderer';
 import { useFitToWidth } from './use-fit-to-width';
 import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel, splitLabeledBoxItems } from './box-conversion';
@@ -1091,6 +1092,8 @@ function preprocessMathpixContent(text: string): string {
       return `$$${inner}$$`;
     }
   );
+  // 2-4a-0b. cases 뒤 짧은 괄호 덧말(「(k는 상수)」)은 같은 줄에 — 승격 때문에 다음 줄로 떨어지던 것
+  result = absorbCasesTrailingRemark(result);
 
   // 2-4a-1. 집합 조건제시 막대 \left| → \middle| (\left\{…\right\} 안, KaTeX 불균형 해소).
   //   ★ \left\{…\right. (cases/piecewise) 변환 전에 — 집합은 \right\}(brace) 라 아래 변환과 무관.

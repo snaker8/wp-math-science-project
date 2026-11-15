@@ -597,7 +597,7 @@ function FigureMarkerRenderer({
   //   종전엔 라벨 글마다 보기 박스가 따로 생기고 그림은 박스 밖에 크게 떨어져 본문 그림처럼 보였다.
   //   조건: 그림 2개↑ · 모든 그림이 라벨을 달고 있음 · 그림 사이 글은 라벨뿐 · 폭 지정 없음. 하나라도 어긋나면 종전 렌더.
   {
-    const LABEL_TAIL = /(?:^|\n)[ \t]*([ㄱ-ㅎ])[ \t]*[.)][ \t]*$/;
+    const LABEL_TAIL = /(?<=^|\n|[>〉])[ \t]*([ㄱ-ㅎ])[ \t]*[.)][ \t]*$/;
     const figIdxs = contentParts.map((p, k) => (p.type === 'figure' ? k : -1)).filter((k) => k >= 0);
     const labels = figIdxs.map((k) => {
       const prev = contentParts[k - 1];
