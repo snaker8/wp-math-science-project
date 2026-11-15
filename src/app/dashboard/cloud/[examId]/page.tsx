@@ -592,6 +592,54 @@ function FigureMarkerRenderer({
   // ═══ 라인 모드 렌더링 ═══
   // ★ 연속 그림 런(2개↑)은 한 줄에 가운데 정렬로 묶고 그림마다 밑에 캡션 — 왼쪽으로 쏠려 균형이 안 맞던 것
   //   (2026-11-04 대표 「그림 밑에 가,나 제대로 균형 있게」, 온천중 25-1-2-F #11).
+  // ★ 보기 라벨 그림 — 「<보기>\nㄱ.[도형]\nㄴ.[도형]…」 (2026-11-16 해운대여고 25-1-2-F #3).
+  //   그림마다 앞 글이 라벨(ㄱ.)뿐이면 한 보기 박스 안에 「라벨+그림」 격자로 그린다.
+  //   종전엔 라벨 글마다 보기 박스가 따로 생기고 그림은 박스 밖에 크게 떨어져 본문 그림처럼 보였다.
+  //   조건: 그림 2개↑ · 모든 그림이 라벨을 달고 있음 · 그림 사이 글은 라벨뿐 · 폭 지정 없음. 하나라도 어긋나면 종전 렌더.
+  {
+    const LABEL_TAIL = /(?:^|\n)[ \t]*([ㄱ-ㅎ])[ \t]*[.)][ \t]*$/;
+    const figIdxs = contentParts.map((p, k) => (p.type === 'figure' ? k : -1)).filter((k) => k >= 0);
+    const labels = figIdxs.map((k) => {
+      const prev = contentParts[k - 1];
+      const m = prev && prev.type === 'text' ? prev.text.match(LABEL_TAIL) : null;
+      return m ? m[1] : '';
+    });
+    const first = figIdxs[0];
+    const last = figIdxs[figIdxs.length - 1];
+    const between = contentParts.slice(first + 1, last).filter((p) => p.type === 'text');
+    const ok = figIdxs.length >= 2
+      && labels.every(Boolean)
+      && figIdxs.every((k) => !contentParts[k].widthPercent)
+      && figIdxs.every((k, n) => n === 0 || k === figIdxs[n - 1] + 2)
+      && between.every((p) => p.text.replace(LABEL_TAIL, '').trim() === '');
+    if (ok) {
+      // 머리글 — 첫 라벨과 「<보 기>」 표제 줄을 떼어 낸다(박스가 표제를 그린다)
+      const head = contentParts[first - 1].text.replace(LABEL_TAIL, '').replace(/\n?[ \t]*[<〈][ \t]*보[ \t]*기[ \t]*[>〉][ \t]*$/, '');
+      const out: React.ReactNode[] = [];
+      contentParts.slice(0, first - 1).forEach((p, k) => {
+        if (p.type === 'text' && p.text.trim()) out.push(renderTextWithBadge(p.text, `h-${k}`, 'block text-sm text-content-secondary leading-relaxed'));
+      });
+      if (head.trim()) out.push(renderTextWithBadge(head, 'head', 'block text-sm text-content-secondary leading-relaxed'));
+      const cols = figIdxs.length === 2 || figIdxs.length === 4 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3';
+      out.push(
+        <div key="labeled-box" className="my-3 rounded-md border border-gray-500 px-4 py-3">
+          <div className="mb-2 text-xs text-content-tertiary">&lt;보기&gt;</div>
+          <div className={`grid ${cols} gap-x-4 gap-y-3`}>
+            {figIdxs.map((k, n) => (
+              <div key={k} className="flex min-w-0 flex-col">
+                <span className="text-sm font-semibold text-content-secondary">{labels[n]}.</span>
+                <div className="[&_img]:max-h-40">{renderFigurePart(contentParts[k], k, n)}</div>
+              </div>
+            ))}
+          </div>
+        </div>,
+      );
+      contentParts.slice(last + 1).forEach((p, k) => {
+        if (p.type === 'text' && p.text.trim()) out.push(renderTextWithBadge(p.text, `t-${k}`, 'block text-sm text-content-secondary leading-relaxed'));
+      });
+      return <div className="inline">{out}</div>;
+    }
+  }
   const nodes: React.ReactNode[] = [];
   for (let i = 0; i < contentParts.length; i++) {
     const part = contentParts[i];
