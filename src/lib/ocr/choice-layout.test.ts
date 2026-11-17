@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectChoiceLayoutFromLines, type OcrLineBox } from './choice-layout';
+import { detectChoiceLayoutFromLines, relaxVerticalForShortChoices, type OcrLineBox } from './choice-layout';
 
 const box = (text: string, x: number, y: number, w = 100, h = 30): OcrLineBox => ({
   text,
@@ -46,5 +46,22 @@ describe('detectChoiceLayoutFromLines', () => {
     expect(detectChoiceLayoutFromLines([box('① 1', 0, 100), box('② 2', 200, 100)])).toBeUndefined();
     expect(detectChoiceLayoutFromLines([])).toBeUndefined();
     expect(detectChoiceLayoutFromLines([{ text: '① 1 ② 2 ③ 3 ④ 4 ⑤ 5' }])).toBeUndefined();
+  });
+});
+
+describe('relaxVerticalForShortChoices', () => {
+  const BS = String.fromCharCode(92);
+  const deg = [45, 50, 55, 60, 65].map((n, i) => `(${i + 1}) $${n}^{${BS}circ}$`);
+  it('세로 + 짧은 보기 → 3열 (학장중 #1: 보기 왼쪽 세로·그림 오른쪽)', () => {
+    expect(relaxVerticalForShortChoices(1, deg)).toBe(3);
+    expect(relaxVerticalForShortChoices(1, [`$${BS}frac{1}{2}$`, `$${BS}sqrt{3}$`, '$-2$', '$4$', '$10$'])).toBe(3);
+  });
+  it('세로 + 문장형 보기 → 원본대로 세로', () => {
+    expect(relaxVerticalForShortChoices(1, ['두 직선은 서로 평행하다.', '1', '2', '3', '4'])).toBe(1);
+  });
+  it('세로가 아니면 그대로', () => {
+    expect(relaxVerticalForShortChoices(2, deg)).toBe(2);
+    expect(relaxVerticalForShortChoices(5, deg)).toBe(5);
+    expect(relaxVerticalForShortChoices(undefined, deg)).toBeUndefined();
   });
 });
