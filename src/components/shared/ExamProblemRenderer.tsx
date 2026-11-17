@@ -2,6 +2,7 @@
 
 import React, { memo } from 'react';
 import { detectLabeledFigureBox } from './labeled-figure-box';
+import { groupFigureRuns } from './figure-runs';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { estimateChoiceWidth, planHorizontalChoices } from '@/components/shared/choice-width';
@@ -507,7 +508,7 @@ function ExamProblemRendererInner({
                 <div key={k} className="flex min-w-0 flex-col">
                   <span className="font-semibold text-gray-800">{lfb.labels[n]}.</span>
                   {/* flex 로 감싸면 그림이 칸 폭 아래로 줄지 않아 좌우가 잘린다 — 블록 + max-w-full 로 칸에 맞춰 줄인다 */}
-                  <div className="min-w-0 text-center [&_img]:mx-auto [&_img]:h-auto [&_img]:max-h-36 [&_img]:w-auto [&_img]:max-w-full [&_svg]:max-w-full">{renderFigure(n)}</div>
+                  <div className="min-w-0 text-center [&_img]:mx-auto [&_img]:h-auto [&_img]:max-h-36 [&_img]:w-auto [&_img]:!max-w-full [&_svg]:max-w-full">{renderFigure(n)}</div>
                 </div>
               ))}
             </div>
@@ -515,6 +516,39 @@ function ExamProblemRendererInner({
         );
         tailTexts.forEach((p, k) => out.push(renderTextWithBadge(p.text, `lt-${k}`, k === tailTexts.length - 1)));
         return out;
+      }
+
+      // ★ 붙어 있는 그림([도형][도형]) — 카드처럼 옆으로 나란히, 대괄호 캡션은 그림 밑에 (2026-11-17 대표: 카드와 인쇄가 달랐다)
+      //   런이 하나도 없으면 아래 일반 인라인 모드(종전 코드)로 그대로 간다.
+      const groups = groupFigureRuns(parts);
+      if (groups.some((g) => g.kind === 'run')) {
+        const lastTextG = groups.map((g) => g.kind).lastIndexOf('text');
+        return groups.map((g, gi) => {
+          if (g.kind === 'text') return renderTextWithBadge(g.text, `g-${gi}`, gi === lastTextG);
+          if (g.kind === 'figure') {
+            return (
+              <div key={`g-${gi}`} className="my-1 flex justify-center">
+                <div className="min-w-0 flex justify-center" style={g.widthPercent ? { width: `${g.widthPercent}%` } : undefined}>
+                  {renderFigure(g.figIdx, g.widthPercent)}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={`g-${gi}`} className="my-1 flex items-end justify-center gap-x-3">
+              {g.figIdxs.map((fi, k) => (
+                <div key={fi} className="min-w-0 flex-1 text-center [&_img]:mx-auto [&_img]:h-auto [&_img]:max-h-40 [&_img]:w-auto [&_img]:!max-w-full [&_svg]:max-w-full">
+                  {renderFigure(fi)}
+                  {g.captions[k] && (
+                    <div className="mt-0.5 text-[0.85em] leading-snug text-gray-700">
+                      <MixedContentRenderer content={g.captions[k]} className="text-gray-700" inline />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        });
       }
 
       // 일반 인라인 모드

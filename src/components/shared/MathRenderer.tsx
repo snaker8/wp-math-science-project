@@ -1,6 +1,7 @@
 'use client';
 
 import { SLANT_PARALLEL } from './parallel-symbol';
+import { keepShortRhs } from './render-polish';
 import React, { useMemo, useRef } from 'react';
 import katex from 'katex';
 import { balanceBraces, balanceLeftRight } from './latex-balance';
@@ -77,7 +78,8 @@ export function MathRenderer({ content, block = false, className, compact = fals
             //   되던 사고(연립방정식 2벌 나란히, 2026-09-02). 짝 맞으면 no-op.
             const widened = dfracInCases(stretchArrays(balanceLeftRight(balanceBraces(stripped))));
             // compact: 인라인이라도 \displaystyle 생략 (박스 안 cases 세로 간격 축소용)
-            const processedContent = (block || compact) ? widened : `\\displaystyle ${widened}`;
+            // ★ 긴 인라인 식 끝 「= 0」 이 혼자 다음 줄로 떨어지지 않게 (render-polish.ts)
+            const processedContent = (block || compact) ? widened : `\\displaystyle ${keepShortRhs(widened)}`;
 
             return katex.renderToString(processedContent, {
                 throwOnError: false,

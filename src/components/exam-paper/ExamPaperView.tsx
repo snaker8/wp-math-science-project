@@ -10,6 +10,7 @@
 // ============================================================================
 
 import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
+import { allowBreakAtCommas } from '@/components/shared/render-polish';
 import {
   Printer,
   FileDown,
@@ -1700,9 +1701,11 @@ export function QuickAnswerView({
                 // ★ 서답형 표시 규칙은 quick-answer-display.ts (순수 함수, 회귀 테스트) — 그대로
                 const display = quickAnswerDisplay(str);
                 const isLong = /\n/.test(display) || display.length > 40;
+                // ★ 한 줄짜리 긴 수식(집합 {-6,-5,-2,3,6,7})이 옆 칸으로 넘쳤다(2026-11-17 센텀여고 #14) — 글자를 줄이고 쉼표에서 줄바꿈 허용
+                const isWide = !isLong && display.replace(/\\[a-zA-Z]+|[${}\s\\]/g, '').length >= 12;
                 return (
-                  <div className={`flex items-center leading-relaxed ${isLong ? 'justify-start text-left text-[12px] font-medium' : 'justify-center'}`}>
-                    <MixedContentRenderer content={display} className="text-gray-900" />
+                  <div className={`flex min-w-0 items-center leading-relaxed ${isLong ? 'justify-start text-left text-[12px] font-medium' : isWide ? 'justify-center text-center text-[13px]' : 'justify-center'}`}>
+                    <MixedContentRenderer content={isWide ? allowBreakAtCommas(display) : display} className="text-gray-900" />
                   </div>
                 );
               }
@@ -1714,9 +1717,9 @@ export function QuickAnswerView({
             return (
               <div className="grid grid-cols-5 border-t border-l border-gray-300 rounded-sm overflow-hidden">
                 {sorted.map((p) => (
-                  <div key={p.id ?? p.number} className="border-r border-b border-gray-300 min-h-[64px] flex flex-col break-inside-avoid">
+                  <div key={p.id ?? p.number} className="border-r border-b border-gray-300 min-h-[64px] min-w-0 flex flex-col break-inside-avoid">
                     <div className="text-[11px] font-semibold text-gray-500 bg-gray-50 px-2 py-1 border-b border-gray-200 tabular-nums">{pad2(p.number)}</div>
-                    <div className="flex-1 flex items-center justify-center px-2 py-2 text-[17px] font-bold text-gray-900">{formatAnswer(p)}</div>
+                    <div className="flex-1 min-w-0 flex items-center justify-center px-2 py-2 text-[17px] font-bold text-gray-900">{formatAnswer(p)}</div>
                   </div>
                 ))}
                 {Array.from({ length: fillers }).map((_, i) => (
