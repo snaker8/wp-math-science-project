@@ -3,6 +3,7 @@
 import { trimNewlinesAroundBlocks } from './block-gap';
 import { repairConfusedChoiceMarkers } from '@/lib/ocr/choice-marker-repair';
 import { markBoldAcrossElements } from './bold-span';
+import { markUnderlineAcrossElements } from './underline-span';
 import { splitMulticolumn } from './table-multicolumn';
 import { stripEmptyMath } from './empty-math';
 import React, { memo, useMemo, useRef } from 'react';
@@ -320,6 +321,10 @@ function MixedContentRendererInner({ content, className, onMathClick, inline, di
   // compactInlineMath: 조건/보기 박스 안에서 인라인 cases 등을 textstyle 로(=\displaystyle 생략)
   //   렌더해 항목 세로 간격을 좁힌다. 박스 밖(본문)은 false → 기존 동작 유지.
   const renderElement = (el: ContentElement, i: number, compactInlineMath = false) => {
+    if (el.underline && (el.type === 'text' || el.type === 'inline-math')) {
+      const inner = renderElement({ ...el, underline: false } as ContentElement, i, compactInlineMath);
+      return <u key={i} style={{ textUnderlineOffset: '0.18em' }}>{inner}</u>;
+    }
     if (el.bold && (el.type === 'text' || el.type === 'inline-math')) {
       const inner = renderElement({ ...el, bold: false } as ContentElement, i, compactInlineMath);
       return <strong key={i} className="font-bold">{inner}</strong>;
@@ -761,7 +766,7 @@ function renderInlineFormatting(text: string): React.ReactNode[] {
   return parts.length > 0 ? parts : [text];
 }
 
-type ContentElement = ({ bold?: boolean }) & (
+type ContentElement = ({ bold?: boolean; underline?: boolean }) & (
   | { type: 'text'; value: string }
   | { type: 'inline-math'; value: string }
   | { type: 'display-math'; value: string }
@@ -1382,6 +1387,9 @@ function parseMixedContent(text: string): ContentElement[] {
   // ★ 블록(조건 박스·표·그림·디스플레이 수식) 앞뒤 줄바꿈 걷기 — 박스 위아래가 40px 씩 벌어지던 사고 (2026-09-21)
   trimNewlinesAroundBlocks(elements);
   // ★ 수식을 사이에 둔 `**굵게**` — 요소 경계를 넘어 bold 표시 (bold-span.ts, 2026-09-22)
+  // ★ `<u>밑줄</u>` — 편집창 밑줄 버튼 표기를 실제 밑줄로 (underline-span.ts, 2026-11-18). 굵게보다 먼저.
+  const underlineMarked = markUnderlineAcrossElements(elements);
+  if (underlineMarked !== elements) { elements.length = 0; elements.push(...underlineMarked); }
   const boldMarked = markBoldAcrossElements(elements);
   if (boldMarked !== elements) { elements.length = 0; elements.push(...boldMarked); }
 
