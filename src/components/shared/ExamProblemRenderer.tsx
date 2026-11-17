@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
+import { detectLabeledFigureBox } from './labeled-figure-box';
 import { MixedContentRenderer } from '@/components/shared/MixedContentRenderer';
 import { FigureRenderer } from '@/components/shared/FigureRenderer';
 import { estimateChoiceWidth, planHorizontalChoices } from '@/components/shared/choice-width';
@@ -484,6 +485,34 @@ function ExamProblemRendererInner({
             </div>
           </>
         );
+      }
+
+      // ★ 「ㄱ. [도형] ㄴ. [도형]」 보기 — 라벨과 그림을 한 박스에 (2026-11-17 대표: 인쇄에선 라벨만 박스에 들고 그림이 밖으로 풀렸다)
+      //   판정이 안 서면 아래 일반 인라인 모드로 그대로 간다.
+      const lfb = detectLabeledFigureBox(parts);
+      if (lfb) {
+        const out: React.ReactNode[] = [];
+        parts.slice(0, lfb.headEnd).forEach((p, k) => {
+          if (p.type === 'text' && p.text.trim()) out.push(renderTextWithBadge(p.text, `lh-${k}`));
+        });
+        const tailTexts = parts.slice(lfb.tailStart).filter((p) => p.type === 'text' && p.text.trim());
+        if (lfb.head.trim()) out.push(renderTextWithBadge(lfb.head, 'lhead', tailTexts.length === 0));
+        const cols = lfb.figIdxs.length === 2 || lfb.figIdxs.length === 4 ? 'grid-cols-2' : 'grid-cols-3';
+        out.push(
+          <div key="labeled-box" className="my-1.5 rounded border border-gray-500 px-3 py-2">
+            <div className="mb-1 text-center text-[0.85em] text-gray-700">&lt;보기&gt;</div>
+            <div className={`grid ${cols} gap-x-3 gap-y-2`}>
+              {lfb.figIdxs.map((k, n) => (
+                <div key={k} className="flex min-w-0 flex-col">
+                  <span className="font-semibold text-gray-800">{lfb.labels[n]}.</span>
+                  <div className="flex min-w-0 justify-center overflow-hidden [&_img]:max-h-36 [&_svg]:max-w-full">{renderFigure(n)}</div>
+                </div>
+              ))}
+            </div>
+          </div>,
+        );
+        tailTexts.forEach((p, k) => out.push(renderTextWithBadge(p.text, `lt-${k}`, k === tailTexts.length - 1)));
+        return out;
       }
 
       // 일반 인라인 모드
