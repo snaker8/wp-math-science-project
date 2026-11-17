@@ -820,6 +820,8 @@ function cleanTextLatex(s: string): string {
   t = t.replace(/\\text(?:bf|it|rm)?\s*\{([^{}]*)\}/g, '$1');
   // 감사(hwpx-audit) 발견 클래스: \mathbf/\underline/\overline 등 스타일 명령 — 내용만
   t = t.replace(/\\(?:mathbf|mathrm|mathit|underline|overline|emph)\{([^{}]*)\}/g, '$1');
+  // 편집창 밑줄 표기 `<u>…</u>` — 한글 출력엔 밑줄을 싣지 않고 태그만 걷는다 (글자로 새지 않게)
+  t = t.replace(/<\/?u>/g, '');
   t = t.replace(/\\multicolumn\{\d+\}\{[^{}]*\}\{([^{}]*)\}/g, '$1');
   t = t.replace(/\\q?quad(?![a-zA-Z])/g, ' ');
   t = t.replace(/\\([{}%$#&_])/g, '$1');      // \{ → {, \% → % 등 이스케이프 리터럴
