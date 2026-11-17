@@ -24,31 +24,40 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const subject = searchParams.get('subject');
 
-    let query = supabaseAdmin
-      .from('book_groups')
-      .select('*')
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true });
+    // ★ 1,000행씩 끝까지 읽는다 — 폴더가 1,000개를 넘으면 한 번 조회는 조용히 잘려
+    //   새로 만든 폴더(시중교재 하위 등)가 트리에서 빠지고, 그 안 시험지가 출처 버튼에 안 잡힌다 (2026-11-17, 1,728개).
+    const PAGE = 1000;
+    const groups: any[] = [];
+    for (let from = 0; ; from += PAGE) {
+      let query = supabaseAdmin
+        .from('book_groups')
+        .select('*')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
 
-    if (subject) {
-      query = query.eq('subject', subject);
+      if (subject) {
+        query = query.eq('subject', subject);
+      }
+
+      // 격리 — 자기 institute + 공통 풀 (NULL)
+      // 트랙 필터 — flag false 시 no-op, flag true 시 activeTrack 으로 필터 (book_groups.subject_track DEFAULT 'math')
+      const instituteFiltered = applyInstituteFilter(query, scope, { allowCommonPool: true });
+      const trackFiltered = applyTrackFilter(instituteFiltered, scope);
+      const { data, error } = await trackFiltered.range(from, from + PAGE - 1);
+
+      if (error) {
+        console.error('[API/book-groups] List error:', error.message);
+        return NextResponse.json(
+          { error: 'Failed to fetch book groups', detail: error.message },
+          { status: 500 }
+        );
+      }
+      groups.push(...(data || []));
+      if (!data || data.length < PAGE) break;
     }
 
-    // 격리 — 자기 institute + 공통 풀 (NULL)
-    // 트랙 필터 — flag false 시 no-op, flag true 시 activeTrack 으로 필터 (book_groups.subject_track DEFAULT 'math')
-    const instituteFiltered = applyInstituteFilter(query, scope, { allowCommonPool: true });
-    const trackFiltered = applyTrackFilter(instituteFiltered, scope);
-    const { data: groups, error } = await trackFiltered;
-
-    if (error) {
-      console.error('[API/book-groups] List error:', error.message);
-      return NextResponse.json(
-        { error: 'Failed to fetch book groups', detail: error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ groups: groups || [] });
+    return NextResponse.json({ groups });
   } catch (err) {
     console.error('[API/book-groups] Unexpected error:', err);
     return NextResponse.json(
