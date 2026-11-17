@@ -11,6 +11,7 @@ import { stripDollarsInsideMathEnv } from './math-env-dollar';
 import { wrapBareLatex } from './wrap-bare-latex';
 import { stripDollarBeforeEnv, stripDollarAfterEnv } from './env-dollar-cleanup';
 import { absorbCasesTrailingRemark } from './cases-trailing-remark';
+import { cleanHmlLeftovers } from './render-polish';
 import { MathRenderer } from './MathRenderer';
 import { useFitToWidth } from './use-fit-to-width';
 import { convertChoiceTabularBox, extractConditionBoxes, classifyTabularBlock, matchBoxedLabel, splitLabeledBoxItems } from './box-conversion';
@@ -934,6 +935,9 @@ function preprocessMathpixContent(text: string): string {
   //   렌더되던 사고. ① NFC 로 분해된 한글 음절(중=중) 먼저 재결합 → 음절 안 깨짐.
   //   ② 남은 "단독" 초성자모만 호환자모로 매핑 → 모든 ㄱㄴㄷ 자판형 통일([ㄱ-ㅎ] 일관 매칭).
   let result = text.normalize('NFC').replace(/[ᄀ-ᄒ]/g, (c) => CHOSEONG_TO_COMPAT[c] || c);
+
+  // ★ 한글 수식 찌꺼기(빈 행렬 버팀목·EMPTYSET) — 뒤 단계의 $ 짝 처리보다 먼저 걷어 낸다 (2026-11-17)
+  result = cleanHmlLeftovers(result);
 
   // ═══ Phase 0a: 단독 \ 줄 제거 (조건박스 구분자 — 렌더링 불필요) ═══
   result = result.replace(/^\s*\\+\s*$/gm, '');
