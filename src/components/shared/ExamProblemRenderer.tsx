@@ -497,7 +497,8 @@ function ExamProblemRendererInner({
         });
         const tailTexts = parts.slice(lfb.tailStart).filter((p) => p.type === 'text' && p.text.trim());
         if (lfb.head.trim()) out.push(renderTextWithBadge(lfb.head, 'lhead', tailTexts.length === 0));
-        const cols = lfb.figIdxs.length === 2 || lfb.figIdxs.length === 4 ? 'grid-cols-2' : 'grid-cols-3';
+        // 좁은 2단 칸에 3개씩 넣으면 그림이 너무 작다(2026-11-17 대표) — 항상 2개씩
+        const cols = 'grid-cols-2';
         out.push(
           <div key="labeled-box" className="my-1.5 rounded border border-gray-500 px-3 py-2">
             <div className="mb-1 text-center text-[0.85em] text-gray-700">&lt;보기&gt;</div>
@@ -505,7 +506,8 @@ function ExamProblemRendererInner({
               {lfb.figIdxs.map((k, n) => (
                 <div key={k} className="flex min-w-0 flex-col">
                   <span className="font-semibold text-gray-800">{lfb.labels[n]}.</span>
-                  <div className="flex min-w-0 justify-center overflow-hidden [&_img]:max-h-36 [&_svg]:max-w-full">{renderFigure(n)}</div>
+                  {/* flex 로 감싸면 그림이 칸 폭 아래로 줄지 않아 좌우가 잘린다 — 블록 + max-w-full 로 칸에 맞춰 줄인다 */}
+                  <div className="min-w-0 text-center [&_img]:mx-auto [&_img]:h-auto [&_img]:max-h-36 [&_img]:w-auto [&_img]:max-w-full [&_svg]:max-w-full">{renderFigure(n)}</div>
                 </div>
               ))}
             </div>
