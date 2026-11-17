@@ -64,3 +64,22 @@ export function detectChoiceLayoutFromLines(lines: OcrLineBox[] | null | undefin
   if (cols === 2) return 2;
   return 1; // 한 행에 하나씩 = 세로
 }
+
+/**
+ * 원본이 세로(1)여도 보기가 전부 짧으면 3열로 돌린다.
+ *
+ * 원본은 「보기 왼쪽 세로 + 그림 오른쪽」 배치가 흔한데(학장중 25-2-2-F #1~3), 우리 지면은 그림이 본문 아래로
+ * 내려가 보기만 세로로 길게 남는다 (2026-11-18 대표: 「전부 1자로 나오노」). 짧은 보기(`45°` 류)는 세로일
+ * 이유가 없으므로 3열, 문장형 보기는 원본대로 세로를 지킨다.
+ */
+export function relaxVerticalForShortChoices(layout: number | undefined, choices: string[]): number | undefined {
+  if (layout !== 1 || choices.length < 4) return layout;
+  const visibleLen = (c: string) =>
+    c
+      .replace(/^\s*(?:[①②③④⑤]|\(\s*[1-5]\s*\))\s*/, '')
+      .replace(/\^\s*\{?\s*\\circ\s*\}?/g, '°')
+      .replace(/\\[dt]?frac/g, '')
+      .replace(/\\[a-zA-Z]+/g, 'x')
+      .replace(/[${}\s\\]/g, '').length;
+  return choices.every((c) => visibleLen(c) <= 8) ? 3 : layout;
+}
