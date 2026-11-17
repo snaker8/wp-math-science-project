@@ -4959,6 +4959,8 @@ export default function AnalyzeJobPage() {
                 score: extracted.score ?? pageProbs[idx].score,  // ★ 배점 보존
                 choices: data.choices || [],
                 confidence: cls?.confidence || data.confidence || 0.5,
+                // ★ 원본 보기 배치(줄 위치 감지) — 감지되면 그 값, 아니면 기존 값
+                ...(typeof data.choiceLayout === 'number' ? { choiceLayout: data.choiceLayout } : {}),
                 status: 'completed',
                 cropImageBase64: imageBase64 || undefined,
                 // 그래프/도형 분석 결과
@@ -5103,6 +5105,7 @@ export default function AnalyzeJobPage() {
               score: extracted.score ?? pageProbs[idx].score,  // ★ 배점 보존
               choices: data.choices || [],
               confidence: data.confidence || 0.5,
+              ...(typeof data.choiceLayout === 'number' ? { choiceLayout: data.choiceLayout } : {}),
               status: 'completed',
               ...(classification ? {
                 problemId: classification.problemId,
@@ -5201,7 +5204,7 @@ export default function AnalyzeJobPage() {
 
   // 크롭 OCR 결과로 문제 데이터 업데이트하는 공통 헬퍼
   const updateProblemFromCropOCR = useCallback((
-    data: { ocrText: string; choices?: string[]; confidence?: number; graphData?: GraphData; classification?: Record<string, unknown> },
+    data: { ocrText: string; choices?: string[]; choiceLayout?: number; confidence?: number; graphData?: GraphData; classification?: Record<string, unknown> },
   ) => {
     // classification에서 풀이 추출
     const cls = data.classification?.classification as Record<string, unknown> | undefined;
@@ -5232,6 +5235,8 @@ export default function AnalyzeJobPage() {
                 content: data.ocrText || p.content,
                 choices: data.choices && data.choices.length > 0 ? data.choices : p.choices,
                 confidence: data.confidence ?? p.confidence,
+                // ★ 다시 읽기 — 이미 정해 둔 배치가 있으면 그대로, 없을 때만 감지값
+                ...(typeof data.choiceLayout === 'number' && (p as { choiceLayout?: number }).choiceLayout === undefined ? { choiceLayout: data.choiceLayout } : {}),
                 // ★ graphData 업데이트
                 graphData: data.graphData ?? p.graphData,
                 // ★ classification/풀이 업데이트

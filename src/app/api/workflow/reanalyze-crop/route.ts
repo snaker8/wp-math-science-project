@@ -13,6 +13,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { extractChoicesFromOCR } from '@/lib/ocr/extract-choices-from-ocr';
+import { detectChoiceLayoutFromLines } from '@/lib/ocr/choice-layout';
 import { detectAndRepairSymbols } from '@/lib/ocr/symbol-detector';
 import { withSamplingParams, CLAUDE_MODELS } from '@/lib/claude/model-params';
 
@@ -447,6 +448,12 @@ export async function POST(request: NextRequest) {
       choices,
       confidence,
     };
+    // ★ 원본 보기 배치 — 줄 위치(line_data)로 한 행에 보기가 몇 개인지 센다. 확정 못 하면 안 보낸다(기존 값 유지).
+    if (choices.length >= 4) {
+      const choiceLayout = detectChoiceLayoutFromLines(ocrResult?.line_data);
+      if (choiceLayout !== undefined) responseData.choiceLayout = choiceLayout;
+      console.log(`[Reanalyze] 보기 배치 감지: ${choiceLayout ?? '불명'} (줄 ${Array.isArray(ocrResult?.line_data) ? ocrResult.line_data.length : 0})`);
+    }
 
     // 그래프 데이터가 있고 type이 none이 아닌 경우에만 포함
     if (graphData && graphData.type !== 'none') {
