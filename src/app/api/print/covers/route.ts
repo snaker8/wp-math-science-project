@@ -44,6 +44,25 @@ export type CoverAsset = { name: string; path: string; url: string; size: number
 /** 저장한 표지(디자인+이미지+제목·부제목·학원명·안내문) — 시험지와 무관하게 만들어 두고 아무 시험지에나 붙인다 (2026-09-21 대표 요청) */
 export type CoverTemplate = { name: string; path: string; settings: Record<string, unknown>; createdAt: string | null };
 const TPL_DIR = 'templates/';
+/** 표지별 기본 글자 설정 (대표 「기본 표지 마다 기본 설정값이 있어야 겠다. 매번 바꾸고 하는건 아닌듯」 2026-11-22).
+ *  `{폴더}/defaults/{key}.json` — key = coverDefaultKey(디자인, 이미지). 운영자가 저장 = 공용(모든 센터),
+ *  센터가 저장 = 그 센터만. 읽을 때 공용 위에 센터 것을 덮는다. */
+const DEF_DIR = 'defaults/';
+const KEY_RE = /^[A-Za-z0-9_-]{1,120}$/;
+
+async function readDefaults(admin: NonNullable<typeof supabaseAdmin>, dir: string): Promise<Record<string, Record<string, unknown>>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  const { data: files } = await admin.storage.from(BUCKET).list(dir.slice(0, -1), { limit: 500 });
+  await Promise.all((files ?? []).filter((f) => f.id && f.name.endsWith('.json')).map(async (f) => {
+    const { data: blob } = await admin.storage.from(BUCKET).download(dir + f.name);
+    if (!blob) return;
+    try {
+      const j = JSON.parse(await blob.text()) as { settings?: Record<string, unknown> };
+      if (j.settings && typeof j.settings === 'object') out[f.name.replace(/\.json$/, '')] = j.settings;
+    } catch { /* 깨진 파일은 건너뜀 */ }
+  }));
+  return out;
+}
 
 /** GET — 이 센터의 표지 이미지 목록 (최신순) */
 export async function GET() {
@@ -92,15 +111,34 @@ export async function GET() {
       templates.push({ name: json.name || f.name.replace(/^\d{13}-/, '').replace(/\.json$/, ''), path, settings: json.settings || {}, createdAt: f.created_at ?? null });
     } catch { /* 깨진 파일은 건너뜀 */ }
   }
-  return NextResponse.json({ items, templates, canManageShared: s.isSuperAdmin });
+  // 표지별 기본값 — 공용 위에 센터 것. 어느 쪽에서 왔는지(shared)도 같이 준다
+  const [commonDefs, ownDefs] = await Promise.all([
+    readDefaults(s.admin, COMMON_PREFIX + DEF_DIR),
+    readDefaults(s.admin, prefix + DEF_DIR),
+  ]);
+  const defaults: Record<string, { settings: Record<string, unknown>; shared: boolean }> = {};
+  for (const [k, v] of Object.entries(commonDefs)) defaults[k] = { settings: v, shared: true };
+  for (const [k, v] of Object.entries(ownDefs)) defaults[k] = { settings: v, shared: false };
+  return NextResponse.json({ items, templates, defaults, canManageShared: s.isSuperAdmin });
 }
 
 /** POST — 표지 이미지 추가 { base64, name } → 2480px 이하 WebP 로 정규화해 저장 */
 export async function POST(req: NextRequest) {
   const s = await scope();
   if ('error' in s) return s.error;
-  let body: { base64?: string; name?: string; template?: { name?: string; settings?: Record<string, unknown> } };
+  let body: { base64?: string; name?: string; template?: { name?: string; settings?: Record<string, unknown> }; coverDefault?: { key?: string; settings?: Record<string, unknown> } };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  // ── 표지별 기본값 — 같은 key 면 덮어쓴다 (운영자 = 공용 폴더, 센터 = 센터 폴더)
+  if (body.coverDefault) {
+    const key = String(body.coverDefault.key || '');
+    if (!KEY_RE.test(key)) return NextResponse.json({ error: '잘못된 표지 키' }, { status: 400 });
+    const settings = body.coverDefault.settings && typeof body.coverDefault.settings === 'object' ? body.coverDefault.settings : {};
+    const path = `${s.isSuperAdmin ? COMMON_PREFIX : prefixOf(s.instituteId)}${DEF_DIR}${key}.json`;
+    const buf = Buffer.from(JSON.stringify({ settings, savedAt: new Date().toISOString() }), 'utf8');
+    const { error } = await s.admin.storage.from(BUCKET).upload(path, buf, { contentType: 'application/json', upsert: true });
+    if (error) return NextResponse.json({ error: 'Storage upload failed', message: error.message }, { status: 502 });
+    return NextResponse.json({ ok: true, shared: s.isSuperAdmin });
+  }
   // ── 저장한 표지(JSON) — 이미지가 아니라 설정 묶음. 이름은 한글 그대로(JSON 안), 키는 ASCII
   if (body.template) {
     const name = String(body.template.name || '').trim().slice(0, 40);
@@ -147,8 +185,17 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const s = await scope();
   if ('error' in s) return s.error;
-  let body: { path?: string };
+  let body: { path?: string; coverDefaultKey?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  // 표지별 기본값 지우기 — 내 단계(운영자 = 공용, 센터 = 센터) 것만
+  if (body.coverDefaultKey !== undefined) {
+    const key = String(body.coverDefaultKey);
+    if (!KEY_RE.test(key)) return NextResponse.json({ error: '잘못된 표지 키' }, { status: 400 });
+    const p = `${s.isSuperAdmin ? COMMON_PREFIX : prefixOf(s.instituteId)}${DEF_DIR}${key}.json`;
+    const { error } = await s.admin.storage.from(BUCKET).remove([p]);
+    if (error) return NextResponse.json({ error: error.message }, { status: 502 });
+    return NextResponse.json({ ok: true });
+  }
   const path = body.path || '';
   const allowed = path.startsWith(prefixOf(s.instituteId)) || (s.isSuperAdmin && path.startsWith(COMMON_PREFIX) && !path.slice(COMMON_PREFIX.length).includes('/'));
   if (!allowed || path.includes('..')) {

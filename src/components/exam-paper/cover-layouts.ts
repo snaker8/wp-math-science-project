@@ -34,13 +34,25 @@ export type CoverEl = {
   /** 원본 글꼴 느낌 — 없으면 Pretendard. Google Fonts 로 불러온다 (COVER_FONT_HREF) */
   font?: CoverFont;
 };
-export type CoverFont = 'jua' | 'blackhan' | 'gowun';
+export type CoverFont = 'pretendard' | 'myeongjo' | 'jua' | 'blackhan' | 'dohyeon' | 'gowun';
 export const COVER_FONT_FAMILY: Record<CoverFont, string> = {
+  pretendard: "'Pretendard', 'Noto Sans KR', sans-serif",
+  myeongjo: "'Nanum Myeongjo', 'Pretendard', serif",
   jua: "'Jua', 'Pretendard', sans-serif",
   blackhan: "'Black Han Sans', 'Pretendard', sans-serif",
+  dohyeon: "'Do Hyeon', 'Pretendard', sans-serif",
   gowun: "'Gowun Dodum', 'Pretendard', sans-serif",
 };
-export const COVER_FONT_HREF = 'https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=Jua&display=swap';
+/** 표지 패널 「글씨체」 고르기 (대표 「표지 만들때 텍스트 글씨체 변경」 2026-11-22) */
+export const COVER_FONT_OPTIONS: Array<{ id: CoverFont; label: string }> = [
+  { id: 'pretendard', label: '고딕' },
+  { id: 'myeongjo', label: '명조' },
+  { id: 'jua', label: '주아' },
+  { id: 'blackhan', label: '검은고딕' },
+  { id: 'dohyeon', label: '도현' },
+  { id: 'gowun', label: '고운돋움' },
+];
+export const COVER_FONT_HREF = 'https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gowun+Dodum&family=Jua&family=Nanum+Myeongjo:wght@400;700;800&display=swap';
 export type CoverLayout = {
   els: CoverEl[];
   /** 무늬가 빽빽한 그림 — 원본처럼 테두리 있는 둥근 흰 라벨을 깐다 */
