@@ -1697,7 +1697,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   const problemBlockParas = (prob: HwpxProblem, numberParaPr: number, boxW: number): string[] => {
     const out: string[] = [];
     // 출처는 번호 줄 오른쪽에 작은 글씨(h900) — 지문과 구별
-    const srcRun = prob.source ? textRun(`  (${prob.source})`, CHAR.small) : '';
+    const srcRun = prob.source ? textRun(`  [${prob.source}]`, CHAR.small) : '';
     out.push(paragraph(textRun(`${prob.number}.`, CHAR.number) + srcRun, numberParaPr));
     // 도형(이미지)은 텍스트 흐름에서 떼어 자기 단락으로 (인라인 X — 줄바꿈 방해 방지)
     const figures = (ss: ContentSegment[]) => {
