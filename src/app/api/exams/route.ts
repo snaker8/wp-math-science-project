@@ -73,13 +73,24 @@ export async function GET(request: NextRequest) {
     type ExamListRow = { id: string; [k: string]: any };
     const exams: ExamListRow[] = [];
     let examsError: { message: string } | null = null;
-    for (let from = 0; from < listLimit; from += PAGE) {
-      const to = Math.min(from + PAGE, listLimit) - 1;
-      const { data, error } = await buildQuery(from, to);
-      if (error) { examsError = error; break; }
-      const rows = (data || []) as ExamListRow[];
-      exams.push(...rows);
-      if (rows.length < to - from + 1) break;   // 더 없음
+    // ★ 2026-11-25 속도: 1,000행 묶음을 차례로 받던 것을 동시에 받는다 (2,733장 = 3왕복 → 1왕복).
+    //   첫 묶음을 먼저 받아 꽉 찼을 때만 나머지를 병렬로 — 작은 목록(기본 200)은 종전과 같다.
+    {
+      const first = await buildQuery(0, Math.min(PAGE, listLimit) - 1);
+      if (first.error) examsError = first.error;
+      else {
+        const rows0 = (first.data || []) as ExamListRow[];
+        exams.push(...rows0);
+        if (rows0.length === Math.min(PAGE, listLimit) && listLimit > PAGE) {
+          const starts: number[] = [];
+          for (let from = PAGE; from < listLimit; from += PAGE) starts.push(from);
+          const rest = await Promise.all(starts.map((from) => buildQuery(from, Math.min(from + PAGE, listLimit) - 1)));
+          for (const r of rest) {
+            if (r.error) { examsError = r.error; break; }
+            exams.push(...((r.data || []) as ExamListRow[]));
+          }
+        }
+      }
     }
 
     if (examsError) {
@@ -101,7 +112,35 @@ export async function GET(request: NextRequest) {
     const idChunks: string[][] = [];
     for (let i = 0; i < examIds.length; i += ID_CHUNK) idChunks.push(examIds.slice(i, i + ID_CHUNK));
 
+    // ★ 2026-11-25 속도: 문항 수 + 난이도 분포를 DB 함수 하나(exam_list_stats)로 500장씩 병렬.
+    //   종전엔 exam_problems 8.5만 행을 1,000행씩 내려받아 셌다(약 90왕복) → 클라우드 목록 4초+.
+    //   함수가 실패하면 아래 종전 방식으로 그대로 계산한다 (statsOk=false).
+    const difficultyMap = new Map<string, { low: number; mid: number; high: number; total: number }>();
+    let statsOk = false;
     if (examIds.length > 0) {
+      try {
+        const CHUNK = 500; // RPC 결과도 1,000행에서 잘린다 — 500장씩
+        const chunks: string[][] = [];
+        for (let i = 0; i < examIds.length; i += CHUNK) chunks.push(examIds.slice(i, i + CHUNK));
+        const results = await Promise.all(chunks.map((ids) => supabaseAdmin!.rpc('exam_list_stats', { p_exam_ids: ids })));
+        if (results.every((r) => !r.error)) {
+          for (const { data } of results) {
+            for (const r of (data || []) as Array<{ exam_id: string; problem_count: number; low: number; mid: number; high: number; total: number }>) {
+              problemCountMap.set(r.exam_id, r.problem_count);
+              if (r.total > 0) difficultyMap.set(r.exam_id, { low: r.low, mid: r.mid, high: r.high, total: r.total });
+            }
+          }
+          statsOk = true;
+        } else {
+          console.warn('[API/exams] exam_list_stats 실패 — 종전 방식으로:', results.find((r) => r.error)?.error?.message);
+          problemCountMap.clear(); difficultyMap.clear();
+        }
+      } catch (e) {
+        console.warn('[API/exams] exam_list_stats 예외 — 종전 방식으로', e);
+      }
+    }
+
+    if (examIds.length > 0 && !statsOk) {
       try {
         // ★ Supabase .select() 기본 limit 1000 초과 시 마지막 row 들이 잘려서
         //   일부 exam 의 problemCount=0 으로 표시되던 사고 (동백중 2-1 22건이 보이지 않던 케이스).
@@ -134,8 +173,7 @@ export async function GET(request: NextRequest) {
     //   기존엔 classifications 전체(약 5천행)를 매 로드마다 페이지네이션 스캔 + JS 집계 →
     //   문제 수 증가에 따라 전체 페이지 로딩이 느려지던 병목(2026-06-27). problem_id 인덱스
     //   조인으로 DB 가 집계 → exam 당 1행만 반환(왕복 1회, 전송량 대폭 감소).
-    const difficultyMap = new Map<string, { low: number; mid: number; high: number; total: number }>();
-    if (examIds.length > 0) {
+    if (examIds.length > 0 && !statsOk) {
       try {
         // ★ 500장씩 나눠 부른다 (2026-11-16) — RPC 결과도 1,000행에서 조용히 잘린다.
         //   시험지가 2,600장을 넘으면서 뒤쪽 1,470장의 바가 사라졌다(센텀여고·해강고 25-1-2-F).
