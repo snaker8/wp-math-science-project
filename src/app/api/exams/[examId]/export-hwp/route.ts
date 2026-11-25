@@ -211,10 +211,13 @@ export async function GET(
   const originMap = sourceKinds.size > 0
     ? await loadOrigins(sb, problemIds, examId, authed.data.scope)
     : new Map<string, OriginInfo>();
-  const sourcePrefix = (problemId: string) => {
+  // ★ 2026-11-25 대표 「출처가 문제랑 같은 크기 형식이라 좀 그렇다」 → 본문 첫 줄 대신 번호 옆 작은 글씨(HwpxProblem.source)
+  const sourceOf = (problemId: string): string | undefined => {
     const o = originMap.get(problemId);
-    return o && sourceKinds.has(o.kind) ? `〔${o.label}〕\n` : '';
+    return o && sourceKinds.has(o.kind) ? o.label : undefined;
   };
+  // ★ points=0 — 배점 빼기 (대표 「배점이 다 10점으로 적혀있는데 배점은 빼고」)
+  const hidePoints = searchParams.get('points') === '0';
 
   // HwpxProblem[] 매핑
   const hwpProblems: HwpxProblem[] = await Promise.all(((epRows || []) as Array<{ sequence_number: number; problem_id: string; points: number | null }>)
@@ -225,11 +228,12 @@ export async function GET(
       return {
         number: row.sequence_number,
         // ★ 본문 끝 인라인 보기(①…⑤) 가 choices 와 같으면 제거 — 화면과 같은 안전망. 잘려 나간 꼬리에 그림 자리가 있었으면 되살린다.
-        content: sourcePrefix(row.problem_id) + await resolveFigureContent(stripInlineChoicesKeepFigures(p?.content_latex || '', choices), p?.images, p?.ai_analysis, row.problem_id),
+        source: sourceOf(row.problem_id),
+        content: await resolveFigureContent(stripInlineChoicesKeepFigures(p?.content_latex || '', choices), p?.images, p?.ai_analysis, row.problem_id),
         choices,
         answer: plainAnswer(aj, choices),
         solution: withSolutions ? (p?.solution_latex ? fixOddDollar(p.solution_latex) : undefined) : undefined,
-        points: row.points || undefined,
+        points: hidePoints ? undefined : (row.points || undefined),
       };
     }));
   // ★ debug=1 — 파일 대신 문제 매핑(JSON) 반환: 어떤 그림 URL 이 들어가는지 확인용 (인증 필요)

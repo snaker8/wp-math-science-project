@@ -31,6 +31,8 @@ export interface HwpxProblem {
   answer?: number | string;
   solution?: string;
   points?: number;
+  /** 출처 (예: 「세화여고 2025 고1-1 중간 15번」) — 번호 옆에 작은 글씨로. 본문과 같은 크기로 붙이면 지문처럼 보인다 (2026-11-25 대표) */
+  source?: string;
 }
 
 // 시험지 헤더 메타 — 화면/인쇄(EditableExamHeader StaticFormView)와 동일 필드.
@@ -1694,7 +1696,9 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   //   boxW = <보기>/<조건> 박스 표 폭 (배치 컨텍스트의 가용 폭에 맞춤).
   const problemBlockParas = (prob: HwpxProblem, numberParaPr: number, boxW: number): string[] => {
     const out: string[] = [];
-    out.push(paragraph(textRun(`${prob.number}.`, CHAR.number), numberParaPr));
+    // 출처는 번호 줄 오른쪽에 작은 글씨(h900) — 지문과 구별
+    const srcRun = prob.source ? textRun(`  (${prob.source})`, CHAR.small) : '';
+    out.push(paragraph(textRun(`${prob.number}.`, CHAR.number) + srcRun, numberParaPr));
     // 도형(이미지)은 텍스트 흐름에서 떼어 자기 단락으로 (인라인 X — 줄바꿈 방해 방지)
     const figures = (ss: ContentSegment[]) => {
       for (const s of ss) {
