@@ -1036,6 +1036,20 @@ function imageSize(buf: Uint8Array): { w: number; h: number } {
       i += 2 + ((buf[i + 2] << 8) | buf[i + 3]);
     }
   }
+  // ★ BMP (2026-11-25) — .hml 가져오기 도형은 BMP 로 저장된다. 예전엔 폴백 400×300 으로 떨어져
+  //   정사각형 원 그림이 가로로 늘어났다(코어 시리즈 129문항). width@18, height@22 (int32 LE, 음수=위아래 뒤집힘)
+  if (buf.length >= 26 && buf[0] === 0x42 && buf[1] === 0x4D) {
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const w = dv.getInt32(18, true);
+    const h = Math.abs(dv.getInt32(22, true));
+    if (w > 0 && h > 0) return { w, h };
+  }
+  // GIF — width@6, height@8 (uint16 LE)
+  if (buf.length >= 10 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
+    const w = buf[6] | (buf[7] << 8);
+    const h = buf[8] | (buf[9] << 8);
+    if (w > 0 && h > 0) return { w, h };
+  }
   return { w: 400, h: 300 }; // 폴백
 }
 
@@ -1079,8 +1093,10 @@ async function fetchImages(urls: string[]): Promise<{ info: ImageMap; bytes: Map
       const buf = new Uint8Array(await r.arrayBuffer());
       const { w, h } = imageSize(buf);
       const isJpeg = buf[0] === 0xFF && buf[1] === 0xD8;
-      const ext = isJpeg ? 'jpg' : 'png';
-      const mime = isJpeg ? 'image/jpeg' : 'image/png';
+      const isBmp = buf[0] === 0x42 && buf[1] === 0x4D;
+      const isGif = buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46;
+      const ext = isJpeg ? 'jpg' : isBmp ? 'bmp' : isGif ? 'gif' : 'png';
+      const mime = isJpeg ? 'image/jpeg' : isBmp ? 'image/bmp' : isGif ? 'image/gif' : 'image/png';
       const id = `image${++n}`;
       info.set(url, { id, w, h, ext, mime });
       bytes.set(url, buf);

@@ -253,8 +253,17 @@ export async function PATCH(
       //   그 외 편집자는 관리자 PIN(x-solution-pin, 서버 검증) 을 치면 허용 — 2026-10-20
       //   "자기가 올린 데이터가 아니더라도 시험지명 수정 같은 건 비번을 알면 가능하게".
       //   관리자(ADMIN·ORG_ADMIN)도 남의 자료라 PIN 을 친다(approverBypass: false).
+      //   ★ 2026-11-25 대표 「시험지 네이밍 변경 수정 가능하게 / 선생님들도」 → 「모든 선생님 PIN 없이」:
+      //     이름(title)만 바꾸는 요청은 편집자면 PIN 없이 허용. 폴더 이동·과목·학년 등 다른 칸이 섞이면 종전대로 PIN.
       const isOwner = !!ex.created_by && ex.created_by === user.id;
-      if (!scope.isSuperAdmin && !isOwner) {
+      let titleOnly = false;
+      try {
+        const peek = await request.clone().json();
+        const keys = Object.keys(peek || {}).filter((k) => peek[k] !== undefined);
+        titleOnly = typeof peek?.title === 'string' && peek.title.trim().length > 0
+          && keys.every((k) => k === 'title' || k === 'syncProblemSources');
+      } catch { /* 본문 없음/깨짐 → 종전 규칙 */ }
+      if (!scope.isSuperAdmin && !isOwner && !titleOnly) {
         const denied = await requireAdminPin(request, scope, { purpose: '공용 시험지 수정', approverBypass: false });
         if (denied) return denied;
       }
