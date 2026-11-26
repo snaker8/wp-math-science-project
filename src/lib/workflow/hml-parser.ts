@@ -253,6 +253,7 @@ function renderParagraph(
   imagesOut: string[],
   answerOut: string[],
   answerRichOut?: RichNote[],
+  opts?: { lineBreaks?: boolean },
 ): string {
   const parts: string[] = [];
   let clearedAtEndnote = false;
@@ -286,6 +287,11 @@ function renderParagraph(
       // ★ 개체 메모(SHAPECOMMENT) 는 화면에 안 보이는 주석이다. 수학비서 출제본은 여기에 내려받은
       //   계정 이름을 워터마크로 넣는다(2026-11-11 실측: 그림·수식마다 1,612개). 본문·해설로 새면 안 된다.
       if (tag === 'SHAPECOMMENT') continue;
+      // ★ 문단 안 강제 줄바꿈(Shift+Enter) — 해설은 한 문단 안에서 줄을 이렇게 바꾼다. 버리면 「이므로$…$」처럼
+      //   여러 줄이 한 줄로 붙는다(2026-11-26 코어 해설 실측, 수학비서 원본 1개에 110개). 해설(미주)에서만 살린다 —
+      //   본문은 줄 단위로 보기·번호를 나누는 로직이 있어 종전 동작 유지.
+      if (opts?.lineBreaks && tag === 'LINEBREAK') { parts.push('\n'); continue; }
+      if (opts?.lineBreaks && tag === 'TAB') { parts.push(' '); continue; }
       if (tag === 'EQUATION') {
         const eqChildren = (n[tag] as OrderedNode[]) || [];
         parts.push(hangulEquationToInlineLatex(extractScript(eqChildren)));
@@ -344,8 +350,10 @@ function renderNoteRich(nodes: OrderedNode[], binData: Map<string, string>): Ric
     for (const x of ns) {
       const t = tagOf(x);
       if (t === 'P') {
-        const txt = renderParagraph((x['P'] as OrderedNode[]) || [], binData, images, [])
+        const txt = renderParagraph((x['P'] as OrderedNode[]) || [], binData, images, [], undefined, { lineBreaks: true })
           .replace(/[ \t]+/g, ' ')
+          .replace(/ *\n */g, '\n')
+          .replace(/\n{2,}/g, '\n')
           .trim();
         if (txt) lines.push(txt);
         continue;
@@ -459,6 +467,9 @@ function answerFromChannel(after: string): string {
  *   — 표 처리는 회귀가 잦은 자리라 판정을 좁게 잡는다.
  */
 export function stripSourceFootnote(text: string): string {
+  // ★ 난이도 꼬리표 「∙∙∙∘어려움5」 한 줄 — 표가 풀려 [출처] 없이 줄만 남는 경우가 있다
+  //   (2026-11-26 실측: 본문 끝 35 · 마지막 보기 112). 끝에 붙은 것만 지운다.
+  text = (text || '').replace(/\s*[∙•·][∙∘◦•·○●]{2,}\s*(?:매우\s*)?(?:쉬움|보통|어려움)\s*\d{1,2}\s*$/, '');
   if (!text || !text.includes('[출처]')) return text;
   return text
     // (1) 표 형태 — `\begin{tabular}…[출처]…\end{tabular}`
