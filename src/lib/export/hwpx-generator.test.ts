@@ -603,6 +603,18 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect((between.match(/<hp:p /g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
+  it('해설 — 수식만 있는 줄도 한 줄씩 (줄바꿈만 사이에 있으면 붙던 문제)', async () => {
+    const buf = (await generateHWPX(
+      [{ ...prob(1, 'a'), solution: '대입하면\n$1-a+b-1=0$ $\\therefore$ $a=b$\n$n=3$일 때 $a=3$\n$n=4$일 때 $a=2$' } as never],
+      { title: 't', showNameField: false, showAnswerSheet: false, showSolutions: true },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    const sol = xml.slice(xml.indexOf('>해설<'));
+    // 「대입하면」·「1-a+b-1=0 ∴ a=b」·「n=3일 때 a=3」·「n=4일 때 a=2」 → 문단 4개 이상
+    const paras = sol.split('<hp:p ').filter((p) => p.includes('<hp:equation') || p.includes('대입하면'));
+    expect(paras.length).toBeGreaterThanOrEqual(4);
+  });
+
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {
     const problems = Array.from({ length: 8 }, (_, i) => prob(i + 1, `${i + 1}번 문제 본문`));
     const buf = (await generateHWPX(problems, {

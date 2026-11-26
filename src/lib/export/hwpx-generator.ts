@@ -838,7 +838,7 @@ function cleanTextLatex(s: string): string {
 }
 
 // 텍스트(이미지 제외) → text/equation 세그먼트
-function parseTextMath(text: string): ContentSegment[] {
+function parseTextMath(text: string, keepBreaks = false): ContentSegment[] {
   // ※ "벌거벗은 환경을 $로 감싸기" 시도는 금지 — 이미 $..$ 안에 있는 환경까지 이중 감싸
   //   $ 짝을 대량 파괴 (전수 감사 67→115개 악화 실증, 2026-07-18 롤백). 원본 결함은 경고로만.
   const segs: ContentSegment[] = [];
@@ -869,7 +869,12 @@ function parseTextMath(text: string): ContentSegment[] {
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = mathPattern.exec(text)) !== null) {
-    if (m.index > last) { const t = text.slice(last, m.index); if (t.trim()) pushText(t); }
+    if (m.index > last) {
+      const t = text.slice(last, m.index);
+      if (t.trim()) pushText(t);
+      // ★ 해설: 수식과 수식 사이가 줄바꿈뿐이면 「빈 글자」로 버려져 줄이 붙었다(2026-11-26 코어 해설 「$a=3$⏎$n=4$일 때」). 줄바꿈 표시로 남긴다
+      else if (keepBreaks && t.includes('\n')) segs.push({ type: 'text', value: '\n' });
+    }
     const hwpEq = latexToHWPEquation(m[1] || m[2] || m[3] || m[4]);
     // m[1]=\[..\], m[3]=$$..$$ → 디스플레이 수식 (m[2]=\(..\), m[4]=$..$ 는 인라인)
     if (hwpEq) segs.push({ type: 'equation', value: hwpEq, display: !!(m[1] || m[3]) });
@@ -879,7 +884,7 @@ function parseTextMath(text: string): ContentSegment[] {
   return segs;
 }
 
-function parseContent(content: string): ContentSegment[] {
+function parseContent(content: string, opts?: { keepBreaks?: boolean }): ContentSegment[] {
   if (!content) return [];
   // 1) 이미지(마크다운/HTML) 먼저 추출 → 마커로 치환 (HTML strip 전에)
   const imgs: string[] = [];
@@ -897,7 +902,7 @@ function parseContent(content: string): ContentSegment[] {
   const segments: ContentSegment[] = [];
   const parts = s.split(/ IMG(\d+) /);
   for (let i = 0; i < parts.length; i++) {
-    if (i % 2 === 0) { if (parts[i]) segments.push(...parseTextMath(parts[i])); }
+    if (i % 2 === 0) { if (parts[i]) segments.push(...parseTextMath(parts[i], opts?.keepBreaks)); }
     else { const u = imgs[parseInt(parts[i], 10)]; if (u) segments.push({ type: 'image', value: u }); }
   }
   if (segments.length === 0 && s.trim()) segments.push({ type: 'text', value: s.trim() });
@@ -1155,6 +1160,7 @@ function bodyParagraphs(
     tailRun?: string;
     firstParaPr?: number;
     inlineImages?: boolean;
+    splitLines?: boolean; // 해설 — 글자 속 줄바꿈마다 새 문단(한 줄씩)
   },
 ): string[] {
   const out: string[] = [];
@@ -1178,6 +1184,14 @@ function bodyParagraphs(
       flush();
       out.push(paragraph(equationRun(seg.value), PARA.eq));
       first = false;
+      continue;
+    }
+    if (seg.type === 'text' && opts.splitLines && seg.value.includes('\n')) {
+      const lines = seg.value.split('\n');
+      lines.forEach((ln, li) => {
+        if (li > 0) { if (buf) flush(); }
+        if (ln.trim()) buf += textRun(li > 0 ? ln.replace(/^\s+/, '') : ln, CHAR.body);
+      });
       continue;
     }
     buf += seg.type === 'equation' ? equationRun(seg.value) : textRun(seg.value, CHAR.body);
@@ -1915,12 +1929,13 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
       if (prob.solution) {
         if (solCount++ > 0) P.push(paragraph(''));
         // [도형]/[그림] 마커는 해설에도 잔존 (전수 감사 발견 — sanitize 는 본문 전용이었음)
-        const ss = parseContent(prob.solution.replace(/\[(?:도형|그림)\]/g, ' '));
+        const ss = parseContent(prob.solution.replace(/\[(?:도형|그림)\]/g, ' '), { keepBreaks: true });
         // 해설도 디스플레이 수식은 가운데 자기 단락. 이미지는 기존대로 인라인.
         P.push(...bodyParagraphs(ss, {
           imageMap,
           leadRun: textRun(`${prob.number}. `, CHAR.number),
           inlineImages: true,
+          splitLines: true,
         }));
       }
     }

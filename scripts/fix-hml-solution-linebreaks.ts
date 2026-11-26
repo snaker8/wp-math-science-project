@@ -11,6 +11,7 @@
 import fs from 'fs';
 import path from 'path';
 import { parseHml } from '../src/lib/workflow/hml-parser';
+import { parseWorksheetHml } from '../src/lib/workflow/hml-worksheet';
 import { loadSupabase, parseArgs, fetchByDbId } from './mathsecr-match';
 
 const args = parseArgs();
@@ -49,7 +50,46 @@ export function transplantBreaks(stored: string, fresh: string): string | null {
   return out;
 }
 
+/** --bundles=<dir>: 수학비서 「내 문제지」 묶음(bundle_NNN.hml + .json)으로 받은 해설. 순서 대신 글자 대조로 짝짓는다 */
+async function mainBundles(dir: string) {
+  const sb = loadSupabase();
+  const r = { apply: APPLY, bundles: 0, cands: 0, noMatch: 0, same: 0, changed: 0, updated: 0, errors: [] as string[] };
+  fs.mkdirSync(OUT, { recursive: true });
+  const backupPath = path.join(OUT, 'solution-linebreak-backup.jsonl');
+  const files = fs.readdirSync(dir).filter((f) => /^bundle_\d+\.hml$/.test(f)).slice(0, LIMIT);
+  for (const f of files) {
+    const metaPath = path.join(dir, f.replace(/\.hml$/, '.json'));
+    if (!fs.existsSync(metaPath)) continue;
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as { exams: number[] };
+    r.bundles++;
+    let items;
+    try { items = parseWorksheetHml(fs.readFileSync(path.join(dir, f))); } catch (e) { r.errors.push(`${f}: ${String(e).slice(0, 100)}`); continue; }
+    const byKey = new Map<string, string>();
+    for (const it of items) if (it.solution) byKey.set(keyOf(it.solution), it.solution);
+    for (const db of meta.exams || []) {
+      for (const p of (await fetchByDbId(sb, db)).filter((x) => (x.solution_latex || '').trim())) {
+        r.cands++;
+        const fresh = byKey.get(keyOf(p.solution_latex!));
+        if (!fresh) { r.noMatch++; continue; }
+        const next = transplantBreaks(p.solution_latex!, fresh);
+        if (next == null || next === p.solution_latex) { r.same++; continue; }
+        r.changed++;
+        if (APPLY) {
+          fs.appendFileSync(backupPath, JSON.stringify({ id: p.id, old: p.solution_latex }) + '\n', 'utf-8');
+          const { error } = await sb.from('problems').update({ solution_latex: next }).eq('id', p.id);
+          if (error) r.errors.push(`${p.id}: ${error.message}`); else r.updated++;
+        }
+      }
+    }
+    if (r.bundles % 20 === 0) console.log(`${r.bundles} bundles, changed ${r.changed}`);
+  }
+  fs.writeFileSync(path.join(OUT, `solution-linebreak-bundles${APPLY ? '' : '-dry'}.json`), JSON.stringify(r, null, 1), 'utf-8');
+  const { errors, ...sum } = r;
+  console.log(JSON.stringify({ ...sum, errors: errors.length }));
+}
+
 async function main() {
+  if (args.bundles) return mainBundles(args.bundles);
   if (!args.manifest) { console.error('--manifest 필요'); process.exit(1); }
   const sb = loadSupabase();
   const manifest = JSON.parse(fs.readFileSync(args.manifest, 'utf-8')) as { items: Record<string, { id: number; localPath?: string }> };
