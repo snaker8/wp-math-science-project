@@ -78,6 +78,9 @@ export interface HwpxExamConfig {
   onWarnings?: (warnings: HwpxArtifactWarning[]) => void;
   // 이미지 fetch 생략 (전수 감사용 — 네트워크 없이 텍스트·수식 변환만 검사)
   skipImages?: boolean;
+  // ★ 제본 여백(mm) — 한글 쪽 설정의 「제본」 여백. mirrorGutter=맞쪽(뒷면은 오른쪽). 0/없음=종전과 같음
+  gutterMm?: number;
+  mirrorGutter?: boolean;
 }
 
 // ============================================================================
@@ -995,8 +998,14 @@ function stripInlineChoicesForExport(text: string, dbChoices: string[]): string 
 }
 
 // 문제 본문 전처리: ①유형 태그 첫 줄 제거 ②선두 중복 번호 제거 ③끝 인라인 보기 제거.
+// ★ 수학비서 한글 꼬리표의 난이도 표시 「∙∙∙∘어려움5」 — 가져오기에서 덜 지워져 본문·마지막 보기 끝에 남은 것(2026-11-26 코어 파일에서 발견).
+const DIFFICULTY_TAIL_RE = /\s*[∙•·][∙∘◦•·○●]{2,}\s*(?:매우\s*)?(?:쉬움|보통|어려움)\s*\d{1,2}\s*$/;
+export function stripDifficultyTail(text: string): string {
+  return (text || '').replace(DIFFICULTY_TAIL_RE, '');
+}
+
 function sanitizeProblemContent(content: string, num: number, dbChoices: string[]): string {
-  let s = content || '';
+  let s = stripDifficultyTail(content || '');
   // ① 첫 줄 `| 유형명 |` 태그 — 자산화 시 박힌 분류 라벨. 시험지에 노출되면 학생에게 유형 힌트.
   s = s.replace(/^\s*\|[^|\n]{1,60}\|\s*\n/, '');
   // ①-b 웹 렌더용 도형 위치 마커 — 한글에선 도형이 별도 단락으로 붙으므로 마커 텍스트 제거
@@ -1252,8 +1261,10 @@ function classicHeaderHeight(h: HwpxHeaderMeta): number {
 //   메타(과목·유형 좌 / 학교명 우) → 큰 제목 → 학년 → 이름·점수 줄(아래 가는 구분선).
 //   테두리 없는 2열 표로 좌/우 배치. 구 테두리 표 헤더(buildHeaderTable)를 대체.
 // ----------------------------------------------------------------------------
-const TABLE_W = 52800;                    // 본문 폭(53860)보다 좁게 — 우측 넘침 방지 안전마진
-const HALF_W = Math.floor(TABLE_W / 2);
+let TABLE_W = 52800;                      // 본문 폭(53860)보다 좁게 — 우측 넘침 방지 안전마진. 제본 여백만큼 generateHWPX 가 줄인다
+let HALF_W = Math.floor(TABLE_W / 2);
+let _gutter = 0;                          // 제본 여백(HWPUNIT) — generateHWPX 가 호출마다 설정
+let _secPrXml = SECPR_XML;
 // ★ 행 높이는 "글자 h × 줄간격 160% + 여유" 로 정직하게 — 선언보다 실렌더가 크면(셀 성장)
 //   그리드1 이 첫 페이지 계산에 안 맞아 헤더 단독 페이지 발생 (거제여중 실증, 2026-07-18).
 const ED_ROW_H = { meta: 1900, title: 3400, grade: 1900, name: 2000, band: 550 } as const;
@@ -1673,7 +1684,8 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   // ★ 그리드 모드: 2열 배치는 표가 담당 → 명시적 "1단" colPr (생략 금지 — 위 COLPR_SINGLE 주석).
   const colCtrl = cols === 2 && !gridMode ? COLPR_CTRL : COLPR_SINGLE;
   // 본문 가로폭(HWPUNIT): A4 59528 - 좌우여백 2834*2 = 53860. 2단이면 (그 폭 - 단간격 2000)/2.
-  _colWidth = cols === 2 ? Math.round((53860 - 2000) / 2) : 53860;
+  const bodyW = 53860 - _gutter;
+  _colWidth = cols === 2 ? Math.round((bodyW - 2000) / 2) : bodyW;
   // ★ 문제 간격은 빈 단락이 아니라 '문단 위 간격(space-before)' 으로 — 한글 네이티브 방식.
   //   각 문제 첫 단락에 paraPr PARA_SPACED(90, prev=gap) 적용 → 편집해도 간격 유지, 컬럼 맨 위에선 자동 억제.
   //   (paraPr 90 은 generateHWPX 가 gap 값으로 header.xml 에 주입)
@@ -1847,43 +1859,44 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
   //   "빠 른 정 답" 가운데 제목 + [문항|정답|문항|정답] 4열 표(회색 헤더행, 수식 렌더,
   //   좌 절반=1..half / 우 절반=half+1..n). 나열형은 LaTeX 노출·가독성 문제.
   if (config.showAnswerSheet !== false && problems.length > 0) {
+    // ★ 2026-11-26 대표 「빠른 정답도 정렬하고 한 페이지에 깔끔하게」 — 새 쪽에서 시작, 한 줄에 5문항(번호|정답) 행 우선.
+    //   답이 길면(식·문장) 3문항씩. 행 높이 고정 → 줄이 고르게. 100문항도 한 쪽에 들어간다.
+    const ansText = (p: HwpxProblem) => String(p.answer ?? '').replace(/\$/g, '').trim();
+    const longAns = problems.some((p) => ansText(p).length > 14);
+    const PER_ROW = longAns ? 3 : 5;
+    const PAIR_W = Math.floor(TABLE_W / PER_ROW);
+    const NUM_W = Math.min(3200, Math.floor(PAIR_W * 0.3));
+    const ANS_W = PAIR_W - NUM_W;
+    const ROW_H = 2000;
+    P.push(`<hp:p id="${nextId()}" paraPrIDRef="${PARA.eq}" styleIDRef="${STYLE}" pageBreak="1" columnBreak="0" merged="0">${textRun('빠른 정답', CHAR.title)}${lineSeg(PARA.eq)}</hp:p>`);
     P.push(paragraph(''));
-    P.push(paragraph(textRun('빠 른 정 답', CHAR.title), PARA.eq));
-    P.push(paragraph(''));
-    const NUM_W = 6000;
-    const ANS_W = Math.floor(TABLE_W / 2) - NUM_W;
-    const half = Math.ceil(problems.length / 2);
-    const tc = (inner: string, col: number, r: number, w: number, bf: number, center = true) =>
+    const tc = (inner: string, col: number, r: number, w: number, bf: number) =>
       `<hp:tc name="" header="0" hasMargin="1" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
       + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
-      + paragraph(inner, center ? PARA.eq : PARA.body)
+      + paragraph(inner, PARA.eq)
       + `</hp:subList>`
       + `<hp:cellAddr colAddr="${col}" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/>`
-      + `<hp:cellSz width="${w}" height="1700"/>`
-      + `<hp:cellMargin left="200" right="200" top="150" bottom="150"/>`
+      + `<hp:cellSz width="${w}" height="${ROW_H}"/>`
+      + `<hp:cellMargin left="150" right="150" top="100" bottom="100"/>`
       + `</hp:tc>`;
     const ansRuns = (p?: HwpxProblem) => {
       if (!p || p.answer === undefined || p.answer === '') return textRun('-', CHAR.body);
-      const segs = parseContent(String(p.answer)).filter((s) => s.type !== 'image');
+      const segs = parseContent(String(p.answer)).filter((sg) => sg.type !== 'image');
       return segmentsToRuns(segs, CHAR.body, imageMap) || textRun('-', CHAR.body);
     };
+    const rowCnt = Math.ceil(problems.length / PER_ROW);
     const trs: string[] = [];
-    trs.push('<hp:tr>'
-      + tc(textRun('문항', CHAR.meta), 0, 0, NUM_W, 25) + tc(textRun('정답', CHAR.meta), 1, 0, ANS_W, 25)
-      + tc(textRun('문항', CHAR.meta), 2, 0, NUM_W, 25) + tc(textRun('정답', CHAR.meta), 3, 0, ANS_W, 25)
-      + '</hp:tr>');
-    for (let r = 0; r < half; r++) {
-      const left = problems[r];
-      const right = problems[r + half];
-      trs.push('<hp:tr>'
-        + tc(textRun(String(left?.number ?? ''), CHAR.number), 0, r + 1, NUM_W, 4)
-        + tc(ansRuns(left), 1, r + 1, ANS_W, 4)
-        + tc(textRun(right ? String(right.number) : '', CHAR.number), 2, r + 1, NUM_W, 4)
-        + tc(right ? ansRuns(right) : textRun('', CHAR.body), 3, r + 1, ANS_W, 4)
-        + '</hp:tr>');
+    for (let r = 0; r < rowCnt; r++) {
+      let row = '<hp:tr>';
+      for (let c = 0; c < PER_ROW; c++) {
+        const p = problems[r * PER_ROW + c];
+        row += tc(p ? textRun(String(p.number), CHAR.number) : textRun('', CHAR.body), c * 2, r, NUM_W, 25)
+          + tc(p ? ansRuns(p) : textRun('', CHAR.body), c * 2 + 1, r, ANS_W, 4);
+      }
+      trs.push(row + '</hp:tr>');
     }
-    const ansTbl = `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" rowCnt="${half + 1}" colCnt="4" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
-      + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${(half + 1) * 1700}" heightRelTo="ABSOLUTE" protect="0"/>`
+    const ansTbl = `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt}" colCnt="${PER_ROW * 2}" cellSpacing="0" borderFillIDRef="4" noAdjust="0">`
+      + `<hp:sz width="${PAIR_W * PER_ROW}" widthRelTo="ABSOLUTE" height="${rowCnt * ROW_H}" heightRelTo="ABSOLUTE" protect="0"/>`
       + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
       + `<hp:outMargin left="0" right="0" top="200" bottom="200"/>`
       + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
@@ -1894,10 +1907,13 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
 
   // 해설
   if (config.showSolutions) {
+    // ★ 2026-11-26 대표 「해설 좀 띄워 쓰던지 가독성 있게」 — 새 쪽에서 시작 + 문항 사이 빈 줄
+    P.push(`<hp:p id="${nextId()}" paraPrIDRef="${PARA.eq}" styleIDRef="${STYLE}" pageBreak="1" columnBreak="0" merged="0">${textRun('해설', CHAR.title)}${lineSeg(PARA.eq)}</hp:p>`);
     P.push(paragraph(''));
-    P.push(paragraph(textRun('[ 해설 ]', CHAR.number), PARA.body));
+    let solCount = 0;
     for (const prob of problems) {
       if (prob.solution) {
+        if (solCount++ > 0) P.push(paragraph(''));
         // [도형]/[그림] 마커는 해설에도 잔존 (전수 감사 발견 — sanitize 는 본문 전용이었음)
         const ss = parseContent(prob.solution.replace(/\[(?:도형|그림)\]/g, ' '));
         // 해설도 디스플레이 수식은 가운데 자기 단락. 이미지는 기존대로 인라인.
@@ -1938,7 +1954,7 @@ function buildSection0(problems: HwpxProblem[], config: HwpxExamConfig, imageMap
       ? `<hp:run charPrIDRef="0">${buildHeaderByStyle(config.header, config.showNameField !== false, false)}</hp:run><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>`
       : textRun(config.title, CHAR.title) + lineSeg(PARA.title));
   const firstPara = `<hp:p id="0" paraPrIDRef="${PARA.title}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">`
-    + `<hp:run charPrIDRef="0">${SECPR_XML}${colCtrl}</hp:run>`
+    + `<hp:run charPrIDRef="0">${_secPrXml}${colCtrl}</hp:run>`
     + headerBody
     + `</hp:p>`;
 
@@ -2106,6 +2122,15 @@ export async function generateHWPX(
 ): Promise<Blob | Buffer> {
   _shapeId = 2000000000;
   _droppedCommands.clear();
+  // 제본 여백 — 호출마다 다시 정한다(앞 호출 값이 남지 않게). 1mm = 283.465 HWPUNIT, 최대 30mm
+  const gMm = Math.min(30, Math.max(0, Number(config.gutterMm) || 0));
+  _gutter = Math.round(gMm * 283.465);
+  TABLE_W = 52800 - _gutter;
+  HALF_W = Math.floor(TABLE_W / 2);
+  _secPrXml = _gutter > 0
+    ? SECPR_XML.replace('gutterType="TOP_BOTTOM"', `gutterType="${config.mirrorGutter ? 'LEFT_RIGHT' : 'LEFT_ONLY'}"`)
+      .replace('gutter="0"', `gutter="${_gutter}"`)
+    : SECPR_XML;
 
   // 강조색 정규화 — 유효 hex 아니면 제거 (headerDeco 가 미주입 bf 를 참조하는 사고 방지)
   if (config.header?.accentColor && !/^#[0-9a-fA-F]{6}$/.test(config.header.accentColor)) {
@@ -2120,6 +2145,7 @@ export async function generateHWPX(
   problems = problems.map((p) => ({
     ...p,
     content: sanitizeProblemContent(p.content, p.number, p.choices || []),
+    choices: p.choices ? p.choices.map(stripDifficultyTail) : p.choices,
   }));
 
   // 도형 이미지: content/choices/solution 의 ![](url)·<img> 를 fetch → 임베드

@@ -547,7 +547,7 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(mk).toMatch(/paraPrIDRef="64"[\s\S]*?중간고사/);
   });
 
-  it('빠른정답 표 — PDF 형식(문항|정답 4열, 회색 헤더행, 수식 렌더, LaTeX 노출 없음)', async () => {
+  it('빠른정답 표 — 새 쪽 · 한 줄 N문항(번호|정답 짝, 번호칸 회색) · 수식 렌더 · LaTeX 노출 없음', async () => {
     const buf = (await generateHWPX(
       [
         { ...prob(1, '풀어라.'), answer: '$\\dfrac{1}{5} \\le a \\le 7$' } as never,
@@ -557,12 +557,13 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
       { title: 't', showNameField: false, showAnswerSheet: true },
     )) as Buffer;
     const xml = await section0Of(buf);
-    const ansIdx = xml.indexOf('빠 른 정 답');
+    const ansIdx = xml.indexOf('빠른 정답');
     expect(ansIdx).toBeGreaterThan(0);
+    // 새 쪽에서 시작
+    expect(xml.slice(xml.lastIndexOf('<hp:p ', ansIdx), ansIdx)).toContain('pageBreak="1"');
     const tail = xml.slice(ansIdx);
-    // 4열 표 + 회색 헤더행(문항/정답 bf25)
-    expect(tail).toMatch(/<hp:tbl[^>]*colCnt="4"/);
-    expect(tail).toContain('문항');
+    // 답이 길면(식) 한 줄 3문항 = 6열, 번호칸 회색(bf25)
+    expect(tail).toMatch(/<hp:tbl[^>]*colCnt="6"/);
     expect(tail).toContain('borderFillIDRef="25"');
     // 수식 렌더 + 원문 노출 없음
     expect(tail).toContain('<hp:equation');
@@ -570,6 +571,36 @@ describe('generateHWPX 통합 (section0.xml 구조)', () => {
     expect(tail).not.toContain('\\dfrac');
     // 좌 1..2 / 우 3 배치 (half=2)
     expect(tail).toContain('②');
+  });
+
+  it('빠른정답 — 답이 짧으면 한 줄 5문항(10열)', async () => {
+    const problems = Array.from({ length: 12 }, (_, i) => ({ ...prob(i + 1, '풀어라.'), answer: '③' }) as never);
+    const xml = await section0Of((await generateHWPX(problems, { title: 't', showNameField: false, showAnswerSheet: true })) as Buffer);
+    const tail = xml.slice(xml.indexOf('빠른 정답'));
+    expect(tail).toMatch(/<hp:tbl[^>]*rowCnt="3" colCnt="10"/);
+  });
+
+  it('난이도 꼬리표(∙∙∙∘어려움5)는 본문·보기에서 지운다', async () => {
+    const buf = (await generateHWPX(
+      [{ ...prob(1, '옳은 것은?\n∙∙∙∘어려움5'), choices: ['ㄱ', 'ㄴ', 'ㄷ', 'ㄱ, ㄴ', 'ㄱ, ㄴ, ㄷ\n∙∙∘∘보통4'] } as never],
+      { title: 't', showNameField: false, showAnswerSheet: false },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    expect(xml).not.toMatch(/어려움|보통4|∙∙/);
+    expect(xml).toContain('ㄱ, ㄴ, ㄷ');
+  });
+
+  it('해설 — 새 쪽에서 시작하고 문항 사이를 띄운다', async () => {
+    const buf = (await generateHWPX(
+      [{ ...prob(1, 'a'), solution: '첫 해설' } as never, { ...prob(2, 'b'), solution: '둘째 해설' } as never],
+      { title: 't', showNameField: false, showAnswerSheet: false, showSolutions: true },
+    )) as Buffer;
+    const xml = await section0Of(buf);
+    const i = xml.indexOf('>해설<');
+    expect(i).toBeGreaterThan(0);
+    expect(xml.slice(xml.lastIndexOf('<hp:p ', i), i)).toContain('pageBreak="1"');
+    const between = xml.slice(xml.indexOf('첫 해설'), xml.indexOf('둘째 해설'));
+    expect((between.match(/<hp:p /g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
   it('perPage 미지정: 그리드 표 없이 NEWSPAPER 2단 자연 흐름 (기존 동작 보존)', async () => {
