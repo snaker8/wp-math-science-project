@@ -19,7 +19,7 @@ const WEIGHT_OPTIONS: Array<{ w: number; label: string }> = [
   { w: 700, label: '굵게' }, { w: 900, label: '아주 굵게' },
 ];
 
-export type CoverDesign = 'minimal' | 'classic' | 'band' | 'grid' | 'image-band' | 'image-full';
+export type CoverDesign = 'minimal' | 'classic' | 'band' | 'grid' | 'core' | 'image-band' | 'image-full';
 
 export type CoverSettings = {
   on: boolean;
@@ -65,6 +65,7 @@ export const COVER_DESIGNS: Array<{ id: CoverDesign; label: string; hint: string
   { id: 'classic', label: '클래식', hint: '이중 테두리 · 가운데 제목 · 정보표', image: false },
   { id: 'band', label: '밴드', hint: '상단 색 띠 안에 제목', image: false },
   { id: 'grid', label: '격자', hint: '점 격자 바탕 · 왼쪽 정렬', image: false },
+  { id: 'core', label: '코어', hint: '강조색 전면 · 큰 제목 · 과녁 무늬 (책 표지, 이름칸 없음)', image: false },
   { id: 'image-band', label: '이미지+글', hint: '위 60% 이미지 · 아래 제목·이름칸', image: true },
   { id: 'image-full', label: '이미지 전면', hint: '이미지가 한 장 전체 · 제목 띠 선택', image: true },
 ];
@@ -225,6 +226,51 @@ export function CoverPage({
 
   let body: React.ReactNode;
   switch (settings.design) {
+    case 'core': {
+      // ★ 코어 표지 (2026-11-26 대표 「코어 시리즈 교재 표지 멋진 거」→「사이트에도 넣어라」)
+      //   강조색 전면 바탕 + 모눈 + 큰 제목 + 오른쪽 아래 과녁(겹친 원·눈금·가운데 점). 이름칸 없음(책 표지).
+      //   바탕이 밝으면 글자 검정, 어두우면 흰색 — 강조색 하나로 옐로우·블루·블랙이 다 나온다.
+      const hex = /^#[0-9a-f]{6}$/i.test(color) ? color : '#0e0f12';
+      const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+      const light = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 > 150;
+      const ink = light ? '#1b1b1b' : '#ffffff';
+      const sub = light ? 'rgba(27,27,27,.72)' : 'rgba(255,255,255,.72)';
+      const ring = light ? 'rgba(27,27,27,.16)' : 'rgba(255,255,255,.16)';
+      const grid = light ? 'rgba(27,27,27,.06)' : 'rgba(255,255,255,.05)';
+      const dot = light ? '#1b1b1b' : '#ffffff';
+      const ticks = Array.from({ length: 72 }, (_, k) => {
+        const a = (k * 5 * Math.PI) / 180; const r2 = k % 6 ? 104 : 99;
+        return <line key={k} x1={115 + 108 * Math.cos(a)} y1={115 + 108 * Math.sin(a)} x2={115 + r2 * Math.cos(a)} y2={115 + r2 * Math.sin(a)} stroke={ring} strokeWidth={0.6} />;
+      });
+      const info = infoOverride ? infoOverride.split(/\s*[·,|]\s*|\n/).filter(Boolean).slice(0, 4) : [];
+      body = (
+        <div style={{ position: 'absolute', inset: 0, background: hex, color: ink }}>
+          <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(${grid} 1px,transparent 1px),linear-gradient(90deg,${grid} 1px,transparent 1px)`, backgroundSize: '38px 38px' }} />
+          <svg viewBox="0 0 230 230" style={{ position: 'absolute', right: -265, bottom: -150, width: 870, height: 870 }} aria-hidden>
+            {[108, 92, 76, 60, 44, 28].map((r, i) => <circle key={r} cx={115} cy={115} r={r} fill="none" stroke={ring} strokeWidth={i % 2 ? 1.4 : 0.7} />)}
+            {ticks}
+            <circle cx={115} cy={115} r={14} fill={dot} />
+          </svg>
+          <div style={{ position: 'absolute', left: 68, right: 68, top: 60, display: 'flex', justifyContent: 'space-between', fontSize: sz('academy', 12), ...tx('academy', 700), letterSpacing: '.28em', color: col('academy', sub) }}>
+            <span>{academy}</span>
+          </div>
+          <div style={{ position: 'absolute', left: 68, top: 106, width: 84, height: 8, background: ink }} />
+          <div style={{ position: 'absolute', left: 60, right: 68, top: 150 }}>
+            <div style={{ fontSize: sz('title', 96), ...tx('title', 900), letterSpacing: '-.03em', lineHeight: 1.02, color: col('title'), wordBreak: 'keep-all' }}>{examTitle}</div>
+            {subtitle && <div style={{ marginTop: 22, marginLeft: 6, fontSize: sz('subtitle', 30), ...tx('subtitle', 800), letterSpacing: '-.01em', color: col('subtitle'), wordBreak: 'keep-all' }}>{subtitle}</div>}
+          </div>
+          {settings.note.trim() && (
+            <p style={{ position: 'absolute', left: 68, top: 470, width: 400, margin: 0, fontSize: sz('note', 15), ...tx('note'), lineHeight: 1.65, color: col('note', sub), wordBreak: 'keep-all', whiteSpace: 'pre-wrap' }}>{settings.note.trim()}</p>
+          )}
+          {info.length > 0 && (
+            <div style={{ position: 'absolute', left: 68, top: 580, display: 'flex', gap: 10, flexWrap: 'wrap', maxWidth: 460 }}>
+              {info.map((t) => <span key={t} style={{ border: `1.5px solid ${col('info', ink)}`, color: col('info', ink), borderRadius: 999, padding: '6px 16px', fontSize: sz('info', 13), ...tx('info', 700) }}>{t}</span>)}
+            </div>
+          )}
+        </div>
+      );
+      break;
+    }
     case 'classic':
       body = (
         <div style={{ position: 'absolute', inset: 36, border: `3px double ${color}`, padding: '48px 48px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'center' }}>

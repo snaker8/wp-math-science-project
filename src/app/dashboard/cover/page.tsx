@@ -14,7 +14,8 @@ import { DEFAULT_EXAM_META } from '@/config/exam-templates';
 
 const A4_W = 794;
 const A4_H = 1123;
-const ACCENTS = ['#334155', '#1e3a8a', '#0f766e', '#7c3aed', '#be123c', '#b45309', '#111827'];
+// 뒤 세 개 = 코어 시리즈 옐로우·블루·블랙 (「코어」 표지와 짝, 2026-11-26)
+const ACCENTS = ['#334155', '#1e3a8a', '#0f766e', '#7c3aed', '#be123c', '#b45309', '#111827', '#F6C744', '#123C8C', '#0E0F12'];
 
 export default function CoverMakerPage() {
   const [cover, setCover] = useState<CoverSettings>({ ...DEFAULT_COVER, on: true });
@@ -111,6 +112,8 @@ export default function CoverMakerPage() {
               className={`h-5 w-5 rounded-full border ${accent === c ? 'border-white ring-2 ring-white/40' : 'border-white/20'}`}
               style={{ background: c }} />
           ))}
+          <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} title="직접 고르기"
+            className="h-5 w-6 cursor-pointer rounded border border-white/15 bg-transparent p-0" />
         </div>
         <CoverPanel value={cover} onChange={(next) => setCover({ ...next, on: true })} />
       </aside>
