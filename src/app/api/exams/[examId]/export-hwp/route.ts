@@ -272,6 +272,9 @@ export async function GET(
     problemGap,
     perPage,
     pageCounts,
+    // ★ 제본 여백(mm) · 양면 맞쪽
+    gutterMm: parseInt(searchParams.get('gutter') || '', 10) || 0,
+    mirrorGutter: searchParams.get('mirror') === '1',
     header: headerMeta,
     onWarnings: (w) => { artifactWarnings = w; },
   })) as Buffer;
