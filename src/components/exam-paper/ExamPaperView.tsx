@@ -35,7 +35,7 @@ import { ExamProblemRenderer } from '@/components/shared/ExamProblemRenderer';
 import { ExamPaperHeader } from '@/components/exam/ExamPaperHeader';
 import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/components/exam/EditableExamHeader';
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
-import { CoverPage, CoverPanel, DEFAULT_COVER, type CoverSettings } from './CoverPage';
+import { CoverBackPage, CoverPage, CoverPanel, DEFAULT_COVER, type CoverSettings } from './CoverPage';
 import { quickAnswerDisplay } from './quick-answer-display';
 import { buildExamQrUrl, generateQRDataUrl } from '@/lib/qr/generator';
 import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
@@ -666,12 +666,17 @@ export function ExamPaperView({
   // 폰트(KaTeX) 로드 완료 기다린 뒤 print → 수식 누락 방지
   // 실제 인쇄 실행 (가드 통과 후) — .exam-page 복제 → window.print. 측정 여부 검사 안 함(가드는 handlePrint/타임아웃에서).
   // ★ 인쇄/PDF 공용 — 현재 섹션 선택대로 .exam-page 들을 복제한 #exam-print-root (2026-10-10 PDF 다운로드에서 재사용)
+  // ★ 뒷표지·양면 빈 쪽 — 앞표지(1)+문제 쪽 다음에 뒷표지가 오면 뒷표지가 짝수 쪽이어야 마지막 장 바깥면이 된다
+  const withBackCover = cover.on && cover.back !== false;
+  const frontAndPages = pages.length + (cover.on ? 1 : 0);
+  const duplexBlank = duplex && (withBackCover ? frontAndPages % 2 === 0 : frontAndPages % 2 === 1);
   const buildPrintRoot = useCallback((): HTMLDivElement => {
     const printRoot = document.createElement('div');
     printRoot.id = 'exam-print-root';
 
     if (printSections.exam) {
       document.querySelectorAll('.exam-page').forEach((page) => {
+        if ((page as HTMLElement).classList.contains('exam-back-cover')) return; // 뒷표지는 맨 끝에 (아래)
         printRoot.appendChild(page.cloneNode(true));
       });
     }
@@ -691,8 +696,19 @@ export function ExamPaperView({
         printRoot.appendChild(clone);
       });
     }
+    // ★ 뒷표지 — 빠른답·해설을 같이 뽑아도 인쇄물 맨 끝. 양면이면 짝수 쪽(마지막 장 바깥면)에 오게 빈 쪽 하나
+    const backCover = printSections.exam ? document.querySelector('.exam-page.exam-back-cover') : null;
+    if (backCover) {
+      if (duplex && printRoot.children.length % 2 === 0) {
+        const blank = document.createElement('div');
+        blank.className = 'exam-page';
+        blank.style.cssText = 'background:white; box-sizing:border-box;';
+        printRoot.appendChild(blank);
+      }
+      printRoot.appendChild(backCover.cloneNode(true));
+    }
     return printRoot;
-  }, [printSections]);
+  }, [printSections, duplex]);
 
   // ★ 브라우저 PDF 저장 파일명 = document.title 규칙 — 인쇄·PDF 다운로드 공용
   const printFileTitle = useCallback(() => {
@@ -1518,7 +1534,7 @@ export function ExamPaperView({
               <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {footerUnit ? footerUnits : ''}
               </span>
-              <span style={{ flex: '0 0 auto' }}>{pageIdx + 1} / {pages.length + (duplex && (pages.length + (cover.on ? 1 : 0)) % 2 === 1 ? 1 : 0)}</span>
+              <span style={{ flex: '0 0 auto' }}>{pageIdx + 1} / {pages.length + (duplexBlank ? 1 : 0)}</span>
               <span style={{ flex: 1, textAlign: 'right', whiteSpace: 'nowrap' }}>
                 {[footerAuthor && examMeta.teacher ? `출제 ${examMeta.teacher}` : '', footerId ? `No. ${examId.slice(0, 8)}` : ''].filter(Boolean).join(' · ')}
               </span>
@@ -1526,7 +1542,7 @@ export function ExamPaperView({
           </div>
         ); })}
         {/* ★ 양면 — 홀수 장이면 빈 페이지 한 장. 매쓰홀릭도 「빈 페이지」를 붙인다(실측 4번째 장). 화면엔 표시, 인쇄엔 공백 */}
-        {duplex && (pages.length + (cover.on ? 1 : 0)) % 2 === 1 && (
+        {duplexBlank && (
           <div
             className="exam-page bg-white"
             style={{ width: `${A4_W}px`, minHeight: `${A4_H}px`, padding: `${PRINT_PAD_Y}px ${PAGE_PAD}px`, marginTop: '24px', boxShadow: '0 4px 24px rgba(0,0,0,0.35)', borderRadius: '4px', position: 'relative', boxSizing: 'border-box' }}
@@ -1535,6 +1551,10 @@ export function ExamPaperView({
               빈 페이지 (양면 짝 맞춤)
             </div>
           </div>
+        )}
+        {/* ★ 뒷표지 (2026-11-28 대표 「앞뒤 표지 세트로」) — 인쇄에선 buildPrintRoot 가 맨 끝으로 옮긴다 */}
+        {withBackCover && (
+          <CoverBackPage settings={cover} examTitle={examTitle} meta={examMeta} accent={headerColor} width={A4_W} height={A4_H} />
         )}
         </div>
       </div>

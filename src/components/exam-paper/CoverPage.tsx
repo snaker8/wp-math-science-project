@@ -54,6 +54,10 @@ export type CoverSettings = {
   fieldFont?: Partial<Record<CoverTextField, CoverFont>>;
   /** 글자별 굵기 100~900 (없으면 디자인 기본) */
   fieldWeight?: Partial<Record<CoverTextField, number>>;
+  /** ★ 뒷표지도 같이 (2026-11-28 대표 「표지를 출력할 때 앞뒤 표지 세트로」). undefined = 켜짐 */
+  back?: boolean;
+  /** 뒷표지 문구 (빈값이면 문구 없이 학원명·제목만) */
+  backNote?: string;
 };
 
 export type CoverTextField = 'title' | 'subtitle' | 'academy' | 'info' | 'note';
@@ -425,6 +429,85 @@ export function CoverPage({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 뒷표지 한 장 — 앞표지와 같은 디자인 언어(색·바탕·무늬)로, 문구·학원명·제목만.
+//   2026-11-28 대표 「표지를 출력할 때도 앞뒤 표지 세트로」.
+//   인쇄에선 ExamPaperView.buildPrintRoot 가 맨 끝으로 옮긴다(빠른답·해설을 같이 뽑아도 마지막 장).
+// ─────────────────────────────────────────────────────────────────────────────
+export function CoverBackPage({
+  settings, examTitle, meta, accent, width, height,
+}: {
+  settings: CoverSettings;
+  examTitle: string;
+  meta: ExamMeta;
+  accent: string | null;
+  width: number;
+  height: number;
+}) {
+  const color = accent || '#334155';
+  const title = (settings.title || '').trim() || examTitle;
+  const subtitle = (settings.subtitle || '').trim() || [meta.grade, meta.semester, meta.subject, meta.examType].filter(Boolean).join(' · ');
+  const academy = (settings.academy || '').trim() || meta.schoolName || '';
+  const note = (settings.backNote || '').trim();
+  const font = "'Pretendard', 'Noto Sans KR', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+  const pageStyle: React.CSSProperties = {
+    width, minHeight: height, height, position: 'relative', overflow: 'hidden', boxSizing: 'border-box', padding: 0,
+    background: '#fff', fontFamily: font, boxShadow: '0 4px 24px rgba(0,0,0,0.35)', borderRadius: 4, marginTop: 24, marginBottom: 24,
+    color: '#0f172a',
+  };
+
+  let body: React.ReactNode;
+  if (settings.design === 'core') {
+    // 앞표지 core 와 같은 색 판정 · 모눈 · 과녁 (앞은 오른쪽 아래, 뒤는 오른쪽 위에 흐리게)
+    const hex = /^#[0-9a-f]{6}$/i.test(color) ? color : '#0e0f12';
+    const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const light = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 > 150;
+    const ink = light ? '#1b1b1b' : '#ffffff';
+    const sub = light ? 'rgba(27,27,27,.72)' : 'rgba(255,255,255,.72)';
+    const ring = light ? 'rgba(27,27,27,.12)' : 'rgba(255,255,255,.12)';
+    const grid = light ? 'rgba(27,27,27,.06)' : 'rgba(255,255,255,.05)';
+    body = (
+      <div style={{ position: 'absolute', inset: 0, background: hex, color: ink }}>
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(${grid} 1px,transparent 1px),linear-gradient(90deg,${grid} 1px,transparent 1px)`, backgroundSize: '38px 38px' }} />
+        <svg viewBox="0 0 230 230" style={{ position: 'absolute', right: -300, top: -300, width: 720, height: 720 }} aria-hidden>
+          {[108, 92, 76, 60, 44, 28].map((r, i) => <circle key={r} cx={115} cy={115} r={r} fill="none" stroke={ring} strokeWidth={i % 2 ? 1.4 : 0.7} />)}
+          <circle cx={115} cy={115} r={14} fill={ink} opacity={0.5} />
+        </svg>
+        <div style={{ position: 'absolute', left: 68, top: 60, fontSize: 12, fontWeight: 700, letterSpacing: '.28em', color: sub }}>{academy}</div>
+        <div style={{ position: 'absolute', left: 68, top: 106, width: 84, height: 8, background: ink }} />
+        <div style={{ position: 'absolute', left: 68, right: 68, top: 150, fontSize: 34, fontWeight: 900, letterSpacing: '-.02em', lineHeight: 1.15, wordBreak: 'keep-all' }}>{title}</div>
+        {subtitle && <div style={{ position: 'absolute', left: 70, right: 68, top: 200, fontSize: 16, fontWeight: 700, color: sub, wordBreak: 'keep-all' }}>{subtitle}</div>}
+        {note && <p style={{ position: 'absolute', left: 68, right: 68, top: 270, margin: 0, fontSize: 15, lineHeight: 1.75, color: ink, whiteSpace: 'pre-wrap', wordBreak: 'keep-all' }}>{note}</p>}
+        <div style={{ position: 'absolute', right: 68, bottom: 60, fontSize: 11, fontWeight: 700, letterSpacing: '.3em', color: sub }}>{academy}</div>
+      </div>
+    );
+  } else {
+    // 그 밖의 디자인 — 흰 바탕 + 강조색(띠형은 아래 띠) · 문구 · 학원명. 이미지 표지도 뒤는 글자만
+    const band = settings.design === 'band' || settings.design === 'image-band' || settings.design === 'image-full';
+    body = (
+      <>
+        {settings.design === 'classic' && <div style={{ position: 'absolute', inset: 36, border: `3px double ${color}` }} />}
+        {settings.design === 'grid' && <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '18px 18px' }} />}
+        <div style={{ position: 'absolute', left: 72, right: 72, top: 96 }}>
+          <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.3, wordBreak: 'keep-all' }}>{title}</div>
+          {subtitle && <div style={{ marginTop: 8, fontSize: 14, color: '#475569' }}>{subtitle}</div>}
+          <div style={{ width: 48, height: 3, background: color, marginTop: 20 }} />
+          {note && <p style={{ marginTop: 28, fontSize: 14, lineHeight: 1.8, color: '#334155', whiteSpace: 'pre-wrap', wordBreak: 'keep-all' }}>{note}</p>}
+        </div>
+        {band
+          ? <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: color, color: '#fff', display: 'flex', alignItems: 'center', padding: '0 72px', fontSize: 14, fontWeight: 700, letterSpacing: '.2em' }}>{academy}</div>
+          : <div style={{ position: 'absolute', left: 72, right: 72, bottom: 72, borderTop: `1px solid ${color}`, paddingTop: 14, fontSize: 13, fontWeight: 700, letterSpacing: '.2em', color: '#475569' }}>{academy}</div>}
+      </>
+    );
+  }
+
+  return (
+    <div className="exam-page exam-cover exam-back-cover bg-white" data-cover="back" style={pageStyle}>
+      {body}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 옵션 패널 — 디자인 고르기 · 이미지 라이브러리(올리기/삭제) · 제목 띠 · 안내문
 // ─────────────────────────────────────────────────────────────────────────────
 export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange: (next: CoverSettings) => void }) {
@@ -717,6 +800,17 @@ export function CoverPanel({ value, onChange }: { value: CoverSettings; onChange
         <textarea value={value.note} onChange={(e) => onChange({ ...value, note: e.target.value })} rows={2} placeholder="예: 풀이는 문제 옆 여백에, 채점 후 오답 유형을 표시하세요."
           className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
       </div>
+      <label className="flex items-center gap-2 text-content-secondary">
+        <input type="checkbox" checked={value.back !== false} onChange={(e) => onChange({ ...value, back: e.target.checked })} />
+        뒷표지도 같이 (인쇄물 맨 끝 · 양면이면 마지막 장 바깥면)
+      </label>
+      {value.back !== false && (
+        <div className="flex flex-col gap-1 text-content-secondary">
+          <span className="shrink-0 pt-0.5">뒷표지 문구 (선택)</span>
+          <textarea value={value.backNote || ''} onChange={(e) => onChange({ ...value, backNote: e.target.value })} rows={3} placeholder="예: 단원 구성 · 공부하는 방법 · 학원 연락처"
+            className="rounded-md border border-white/10 bg-transparent px-2 py-1 text-xs text-content-primary placeholder:text-content-tertiary focus:border-white/30 focus:outline-none" />
+        </div>
+      )}
       <p className="text-[10px] text-content-tertiary">비운 칸은 헤더 정보에서 가져옵니다. 표지는 페이지 번호에 세지 않고, 양면이면 짝 계산에 넣습니다. 한글(.hwpx) 내보내기엔 아직 없습니다.</p>
     </div>
   );
