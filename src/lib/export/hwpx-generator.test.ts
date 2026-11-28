@@ -694,3 +694,34 @@ describe('HTML 태그 제거가 수식의 < 를 먹지 않는다 (2026-10-08 부
     expect(warns.map((w) => w.kind)).not.toContain('dollar');
   });
 });
+
+// ★ 학생 풀이 QR (2026-11-28) — 에디토리얼 헤더 오른쪽 QR 열. 헤더 높이 동기화(함정 5)를 지키려고
+//   행을 늘리지 않고 열(전 행 병합)로 붙인다. QR 없으면 종전과 같은 2열이어야 한다.
+describe('학생 풀이 QR 머리말', () => {
+  const probs = [{ number: 1, content: '$1+1$ 의 값은?', choices: ['1', '2', '3', '4', '5'] }];
+  const header = { examTitle: '01 다항식의 연산', subject: '공통수학1', examType: '자체교재', grade: '고1' };
+  it('qrPng 가 있으면 헤더가 3열 + QR 그림 + BinData', async () => {
+    const { generateQRPng, buildExamQrUrl } = await import('../qr/generator');
+    const png = await generateQRPng(buildExamQrUrl('f1b88c76-6d50-414b-910e-0b64df6f2dde'));
+    const buf = (await generateHWPX(probs, { title: 't', header, pageCounts: [1], skipImages: true, qrPng: png })) as Buffer;
+    const zip = await JSZip.loadAsync(buf);
+    const sec = await zip.file('Contents/section0.xml')!.async('string');
+    const plain = await section0Of((await generateHWPX(probs, { title: 't', header, pageCounts: [1], skipImages: true })) as Buffer);
+    const n3 = (x: string) => (x.match(/colCnt="3"/g) || []).length;
+    expect(n3(sec)).toBe(n3(plain) + 1); // 헤더 표만 2열 → 3열
+    expect(sec).toMatch(/binaryItemIDRef="image1"/);
+    expect(zip.file('BinData/image1.png')).toBeTruthy();
+    expect(await zip.file('Contents/content.hpf')!.async('string')).toMatch(/BinData\/image1\.png/);
+  });
+  it('qrPng 가 없으면 종전 2열 그대로', async () => {
+    const buf = (await generateHWPX(probs, { title: 't', header, pageCounts: [1], skipImages: true })) as Buffer;
+    const sec = await section0Of(buf);
+    expect(sec).not.toMatch(/binaryItemIDRef/);
+  });
+  it('다른 헤더 구조(classic)에는 QR 을 넣지 않는다', async () => {
+    const { generateQRPng } = await import('../qr/generator');
+    const png = await generateQRPng('https://example.invalid/q/x');
+    const buf = (await generateHWPX(probs, { title: 't', header: { ...header, headerStyle: 'classic' }, pageCounts: [1], skipImages: true, qrPng: png })) as Buffer;
+    expect(await section0Of(buf)).not.toMatch(/binaryItemIDRef/);
+  });
+});

@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { resolveStudentIdentity } from '@/lib/diagnostics/find-session';
-import { createPrintSession, loadExamSnapshot } from '@/lib/sessions/create-session';
+import { findOrCreateStudentSession } from '@/lib/sessions/create-session';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,46 +52,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   }
   const examId = assignment.exam_id;
 
-  // 이미 있는 세션
-  const { data: sess } = await sb
-    .schema('diagnostics' as never)
-    .from('print_sessions')
-    .select('id, completed_at, issued_at, round_number')
-    .eq('exam_id', examId)
-    .in('student_id', myIds)
-    .order('issued_at', { ascending: false });
-  const sessions = (sess ?? []) as Array<{ id: string; completed_at: string | null; issued_at: string; round_number: number }>;
-  const open = sessions.find((s) => !s.completed_at);
-  if (open) return NextResponse.json({ session_id: open.id, created: false });
-  if (sessions.length > 0) return NextResponse.json({ session_id: sessions[0].id, created: false });
-
-  // 새로 만든다 — 지금 로그인한 학생 id 로
-  let snapshot;
-  try {
-    snapshot = await loadExamSnapshot(sb, examId);
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
-  }
-  if (snapshot.length === 0) return NextResponse.json({ error: '시험지에 문제가 없습니다' }, { status: 400 });
-
-  const r = await createPrintSession(sb, {
-    examId, studentId: user.id, snapshot, roundNumber: 1, sessionType: 'WS',
-    teacherNote: '학생 화면 풀이', issuedBy: assignment.created_by,
+  const r = await findOrCreateStudentSession(sb, {
+    examId, myIds, userId: user.id, teacherNote: '학생 화면 풀이', issuedBy: assignment.created_by,
   });
-  if (!r.ok) {
-    if (r.duplicate) {
-      // 동시에 두 번 눌렀을 때 — 방금 생긴 세션을 돌려준다
-      const { data: again } = await sb
-        .schema('diagnostics' as never)
-        .from('print_sessions')
-        .select('id')
-        .eq('exam_id', examId)
-        .eq('student_id', user.id)
-        .limit(1)
-        .maybeSingle();
-      if (again) return NextResponse.json({ session_id: (again as { id: string }).id, created: false });
-    }
-    return NextResponse.json({ error: r.reason }, { status: 500 });
-  }
-  return NextResponse.json({ session_id: r.sessionId, created: true });
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+  return NextResponse.json({ session_id: r.sessionId, created: r.created });
 }
