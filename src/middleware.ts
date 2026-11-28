@@ -35,6 +35,7 @@ const PUBLIC_PATHS = [
   '/',
   '/auth/login',
   '/auth/signup',
+  '/auth/student-signup', // 학생 QR 가입 (2026-11-28)
   '/auth/callback',
   '/auth/otp',
   '/auth/forgot-password',

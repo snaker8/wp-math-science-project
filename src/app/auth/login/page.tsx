@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, User, Lock, Loader2, AlertCircle, Building2 } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/Logo';
 import { supabaseBrowser, isSupabaseConfigured } from '@/lib/supabase/client';
+import { studentLoginInputToEmail } from '@/lib/students/phone-id';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,6 +28,12 @@ export default function LoginPage() {
   // ★ URL ?org=<id> 학원 표시 — 학원이 자기 사용자들에게 전용 로그인 URL 공유.
   //   useSearchParams 대신 window.location.search 사용해 Suspense boundary 회피.
   const [orgInfo, setOrgInfo] = useState<{ id: string; name: string } | null>(null);
+  // QR(/q/<uuid>) 로 들어온 학생 — 학생 가입 링크에 돌아갈 곳을 붙인다
+  const [qrRedirect, setQrRedirect] = useState<string | null>(null);
+  React.useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get('redirect');
+    if (r && /^\/q\/[0-9a-fA-F-]{36}$/.test(r)) setQrRedirect(r);
+  }, []);
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -45,17 +52,9 @@ export default function LoginPage() {
     })();
   }, []);
 
-  // 학생 탭: 전화번호 입력 → 숫자만 추출 → `<digits>@local.suzag.com` 로그인 ID 변환.
-  // 강사·학부모: 이메일 그대로 사용.
-  const resolveLoginEmail = (rawInput: string, type: typeof loginType): string => {
-    if (type !== 'student') return rawInput.trim();
-    const digits = rawInput.replace(/\D/g, '');
-    if (digits.length >= 9 && digits.length <= 11) {
-      return `${digits}@local.suzag.com`;
-    }
-    // 학생 탭이지만 이메일 형식으로 입력한 경우엔 그대로 시도 (역호환)
-    return rawInput.trim();
-  };
+  // 학생 탭: 전화번호 · 이름 아이디(EDG홍길동) · 이메일 → 로그인 이메일 (lib/students/phone-id)
+  const resolveLoginEmail = (rawInput: string, type: typeof loginType): string =>
+    type === 'student' ? studentLoginInputToEmail(rawInput) : rawInput.trim();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +112,7 @@ export default function LoginPage() {
       const errorMessage = err instanceof Error ? err.message : '로그인에 실패했습니다.';
 
       // 한국어 에러 메시지 변환 — 학생 탭이면 '전화번호' 표현 사용
-      const idLabel = loginType === 'student' ? '전화번호' : '이메일';
+      const idLabel = loginType === 'student' ? '아이디' : '이메일';
       if (errorMessage.includes('Invalid login credentials')) {
         setError(`${idLabel} 또는 비밀번호가 올바르지 않습니다.`);
       } else if (errorMessage.includes('Email not confirmed')) {
@@ -218,15 +217,15 @@ export default function LoginPage() {
           <div className="space-y-2">
             {/* ★ 학생 탭은 실제로 전화번호를 받는데 라벨이 'Email' 이라 어긋났었다 */}
             <label className="text-xs font-bold text-zinc-400 ml-1">
-              {loginType === 'student' ? '전화번호' : '이메일'}
+              {loginType === 'student' ? '아이디 (또는 휴대폰 번호)' : '이메일'}
             </label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
               <input
-                type={loginType === 'student' ? 'tel' : 'email'}
+                type={loginType === 'student' ? 'text' : 'email'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={loginType === 'student' ? '010-1234-5678 또는 01012345678' : '이메일을 입력하세요'}
+                placeholder={loginType === 'student' ? 'EDG홍길동 · 010-1234-5678' : '이메일을 입력하세요'}
                 required
                 className="w-full bg-zinc-950/60 border border-white/10 rounded-lg py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:outline-none focus:border-white/[.25] focus:ring-1 focus:ring-white/[.15] transition-colors"
               />
@@ -268,6 +267,13 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+        {/* ★ QR 로 들어온 학생 — 처음이면 가입부터 (대표 「가입 안 된 학생은 가입 창부터」) */}
+        {qrRedirect && loginType === 'student' && (
+          <a href={`/auth/student-signup?redirect=${encodeURIComponent(qrRedirect)}`}
+            className="mt-4 flex w-full items-center justify-center rounded-lg border border-white/20 py-3 text-sm font-semibold text-content-primary hover:bg-white/5 transition-colors">
+            처음이에요 — 학생 가입하고 바로 풀기
+          </a>
+        )}
 
         <div className="mt-6 text-center space-y-3">
           {/* ★ 예전엔 href="#" 죽은 링크였다 — 눌러도 아무 일이 없어 사용자가 헤맴.
@@ -283,6 +289,16 @@ export default function LoginPage() {
                 회원가입
               </Link>
             </p>
+            {/* ★ 학생 QR 가입 (2026-11-28) — QR 로 들어왔으면 가입 뒤 그 학습지로 돌아간다 */}
+            {loginType === 'student' && (
+              <p className="mt-2 text-sm text-zinc-500">
+                학생이고 처음이라면{' '}
+                <a href={`/auth/student-signup${qrRedirect ? `?redirect=${encodeURIComponent(qrRedirect)}` : ''}`}
+                  className="font-medium text-content-primary underline underline-offset-4 decoration-white/30 hover:decoration-white transition-colors">
+                  학생 가입
+                </a>
+              </p>
+            )}
           </div>
           {!isSupabaseConfigured && (
             <p className="text-xs text-amber-500/70">
