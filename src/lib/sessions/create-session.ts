@@ -101,3 +101,57 @@ export async function createPrintSession(
   }
   return { ok: true, sessionId, problemCount: rows.length };
 }
+
+export type StudentSessionResult =
+  | { ok: true; sessionId: string; created: boolean }
+  | { ok: false; status: number; error: string };
+
+/**
+ * 학생이 이 시험지를 풀 세션 — 있으면 그것(끝나지 않은 것 우선, 없으면 최근 것), 없으면 새로 만든다.
+ * 과제 「풀기 시작」과 인쇄물 QR(/q/[examId])이 같은 규칙을 쓴다.
+ *   myIds    = 신원 병합된 학생 id 들 (resolveStudentIdentity) — 승격 전 명단 id 로 만든 세션도 찾는다
+ *   userId   = 새로 만들 때 쓸 지금 로그인한 학생 id
+ */
+export async function findOrCreateStudentSession(
+  sb: SupabaseClient,
+  args: { examId: string; myIds: string[]; userId: string; teacherNote: string; issuedBy?: string | null },
+): Promise<StudentSessionResult> {
+  const { data: sess } = await sb
+    .schema('diagnostics' as never)
+    .from('print_sessions')
+    .select('id, completed_at, issued_at')
+    .eq('exam_id', args.examId)
+    .in('student_id', args.myIds)
+    .order('issued_at', { ascending: false });
+  const sessions = (sess ?? []) as Array<{ id: string; completed_at: string | null }>;
+  const open = sessions.find((s) => !s.completed_at);
+  if (open) return { ok: true, sessionId: open.id, created: false };
+  if (sessions.length > 0) return { ok: true, sessionId: sessions[0].id, created: false };
+
+  let snapshot: SessionProblemSnapshot[];
+  try {
+    snapshot = await loadExamSnapshot(sb, args.examId);
+  } catch (e) {
+    return { ok: false, status: 500, error: (e as Error).message };
+  }
+  if (snapshot.length === 0) return { ok: false, status: 400, error: '시험지에 문제가 없습니다' };
+
+  const r = await createPrintSession(sb, {
+    examId: args.examId, studentId: args.userId, snapshot, roundNumber: 1, sessionType: 'WS',
+    teacherNote: args.teacherNote, issuedBy: args.issuedBy ?? null,
+  });
+  if (r.ok) return { ok: true, sessionId: r.sessionId, created: true };
+  if (r.duplicate) {
+    // 동시에 두 번 열었을 때 — 방금 생긴 세션을 돌려준다
+    const { data: again } = await sb
+      .schema('diagnostics' as never)
+      .from('print_sessions')
+      .select('id')
+      .eq('exam_id', args.examId)
+      .eq('student_id', args.userId)
+      .limit(1)
+      .maybeSingle();
+    if (again) return { ok: true, sessionId: (again as { id: string }).id, created: false };
+  }
+  return { ok: false, status: 500, error: r.reason };
+}

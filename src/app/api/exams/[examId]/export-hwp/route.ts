@@ -14,6 +14,7 @@ import { generateHWPX, type HwpxProblem } from '@/lib/export/hwpx-generator';
 import { rasterizeSvg } from '@/lib/vision/svg-raster';
 import { stripTrailingInlineChoices } from '@/lib/utils/strip-inline-choices';
 import { createHash } from 'node:crypto';
+import { buildExamQrUrl, generateQRPng } from '@/lib/qr/generator';
 import { loadOrigins } from '@/lib/exam/load-origins';
 import type { OriginInfo } from '@/lib/exam/origin-label';
 
@@ -276,6 +277,8 @@ export async function GET(
     gutterMm: parseInt(searchParams.get('gutter') || '', 10) || 0,
     mirrorGutter: searchParams.get('mirror') === '1',
     header: headerMeta,
+    // ★ 학생용 QR (qr=1) — 찍으면 이 시험지 풀이 화면(/q/[examId]). 선생님용·해설은 넘기지 않는다
+    qrPng: searchParams.get('qr') === '1' ? await generateQRPng(buildExamQrUrl(examId)) : undefined,
     onWarnings: (w) => { artifactWarnings = w; },
   })) as Buffer;
   if (artifactWarnings.length > 0) {

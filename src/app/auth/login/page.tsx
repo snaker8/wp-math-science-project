@@ -131,6 +131,13 @@ export default function LoginPage() {
   };
 
   const navigateByRole = (role: string) => {
+    // ★ 로그인 전에 가려던 곳 (미들웨어가 ?redirect=경로 로 넘김) — 인쇄물 QR(/q/..)을 찍은 학생이
+    //   로그인 뒤 대시보드로 빠지지 않게 (2026-11-28). 지금은 QR 주소(/q/<uuid>)만 — 다른 경로는 종전대로 역할별 첫 화면.
+    const back = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('redirect') : null;
+    if (back && /^\/q\/[0-9a-fA-F-]{36}$/.test(back)) {
+      window.location.href = back;
+      return;
+    }
     let path = '/dashboard';
     switch (role) {
       case 'student':

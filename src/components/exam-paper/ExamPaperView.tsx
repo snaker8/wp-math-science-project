@@ -37,6 +37,7 @@ import { EditableExamHeader, HEADER_THEMES, HeaderDesignGallery } from '@/compon
 import { DEFAULT_EXAM_META, type ExamMeta } from '@/config/exam-templates';
 import { CoverPage, CoverPanel, DEFAULT_COVER, type CoverSettings } from './CoverPage';
 import { quickAnswerDisplay } from './quick-answer-display';
+import { buildExamQrUrl, generateQRDataUrl } from '@/lib/qr/generator';
 import { ensureSolutionPin, solutionPinHeader } from '@/lib/solution-pin-client';
 
 /** 해설에서 [선택지 검증] 섹션 제거 (기존 DB 데이터 호환) — 페이지에서 함께 이동 */
@@ -260,6 +261,16 @@ export function ExamPaperView({
   const sourceTextOf = (p: ProblemData): string | null =>
     showSource && p.originLabel && p.originKind && sourceKinds[p.originKind] ? p.originLabel : null;
   const sourceSig = showSource ? `${+sourceKinds.school}${+sourceKinds.mock}${+sourceKinds.textbook}` : 'off';
+  // ★ 학생 풀이 QR (2026-11-28 대표 「학습지·시험지에 QR 넣고 안 넣고 옵션」) — 기본 꺼짐(종전 출력 불변).
+  //   켜면 첫 쪽 머리말 오른쪽 위에 QR. 찍으면 /q/[examId] → 이 학습지 풀이 화면. 학생용은 켜고 선생님용은 끈다.
+  const [showQr, setShowQr] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!showQr || !examId) { setQrDataUrl(null); return; }
+    let cancelled = false;
+    generateQRDataUrl(buildExamQrUrl(examId), 240).then((u) => { if (!cancelled) setQrDataUrl(u); }).catch(() => { if (!cancelled) setQrDataUrl(null); });
+    return () => { cancelled = true; };
+  }, [showQr, examId]);
   // ★ 매쓰홀릭 시험지 인쇄 캡처 대조(2026-09-21, 대표 「차이가 분명히 보인다」):
   //   ① 칸 고정 — 프리셋(4·6·8)에서 단마다 칸 높이를 같게 나눠 2번·4번이 같은 높이에서 시작(매쓰홀릭 countPerColumn).
   //      종전은 남는 공간을 문제 크기 비례로 나눠 옆 단과 줄이 안 맞았다. ② 번호 「01」 큰 연회색.
@@ -315,6 +326,7 @@ export function ExamPaperView({
     cover?: CoverSettings;
     equalSlots?: boolean; numberPad?: boolean; figureScale?: 0.65 | 0.8 | 1;
     showSource?: boolean; sourceKinds?: { school: boolean; mock: boolean; textbook: boolean };
+    showQr?: boolean;
   };
   const [printPresets, setPrintPresets] = useState<PrintPreset[]>([]);
   useEffect(() => {
@@ -327,7 +339,7 @@ export function ExamPaperView({
   const saveCurrentPreset = () => {
     const name = (prompt('이 출력 설정의 이름을 입력하세요 (예: 내신 2단)') || '').trim();
     if (!name) return;
-    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, bindingMm, cover, equalSlots, numberPad, figureScale, showSource, sourceKinds }]);
+    persistPresets([...printPresets.filter((p) => p.name !== name), { name, columns, gap, pagePad, perPagePreset, headerColor, headerTheme, showLevel, footerUnit, footerAuthor, footerId, duplex, bindingMm, cover, equalSlots, numberPad, figureScale, showSource, sourceKinds, showQr }]);
   };
   const applyPreset = (name: string) => {
     const p = printPresets.find((x) => x.name === name);
@@ -337,6 +349,7 @@ export function ExamPaperView({
     setCover(p.cover ? { ...DEFAULT_COVER, ...p.cover } : DEFAULT_COVER);
     setEqualSlots(p.equalSlots ?? true); setNumberPad(p.numberPad ?? true); setFigureScale(p.figureScale ?? 0.8);
     setShowSource(!!p.showSource); if (p.sourceKinds) setSourceKinds(p.sourceKinds);
+    setShowQr(!!p.showQr);
     setHeaderColor(p.headerColor ?? null);
     setHeaderTheme(p.headerTheme ?? 'none');
   };
@@ -823,7 +836,9 @@ export function ExamPaperView({
         // ★ 출처 — 화면에서 고른 종류만 한글에도
         + (showSource ? `&source=${(['school', 'mock', 'textbook'] as const).filter((k) => sourceKinds[k]).join(',')}` : '')
         // ★ 제본 여백 — 양면이면 한글 「맞쪽」(뒷면 오른쪽)
-        + (bindingMm > 0 ? `&gutter=${bindingMm}${duplex ? '&mirror=1' : ''}` : '');
+        + (bindingMm > 0 ? `&gutter=${bindingMm}${duplex ? '&mirror=1' : ''}` : '')
+        // ★ 학생 풀이 QR (에디토리얼 헤더에만 들어간다)
+        + (showQr ? '&qr=1' : '');
       const res = await fetch(
         `/api/exams/${examId}/export-hwp?withAnswer=${printSections.answer}&withSolutions=${printSections.solution}&columns=${columns}&gap=${gap}${perPageQ}${pageCountsQ}${decoQ}`
       );
@@ -854,7 +869,7 @@ export function ExamPaperView({
     } finally {
       setIsDownloadingHwpx(false);
     }
-  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle, headerColor, headerTheme, hwpxHeaderStyle, showSource, sourceKinds, bindingMm, duplex]);
+  }, [examId, isDownloadingHwpx, perPagePreset, measured, pages, printSections.answer, printSections.solution, columns, gap, examTitle, headerColor, headerTheme, hwpxHeaderStyle, showSource, sourceKinds, bindingMm, duplex, showQr]);
 
   // ★ 문제 렌더링 헬퍼 (시험지 출력용) — 공통 컴포넌트 사용
   //   numberOnTop: 번호를 본문 위로 → 문제를 칼럼 전체 폭으로 넓게.
@@ -986,6 +1001,19 @@ export function ExamPaperView({
                 {label}
               </button>
             ))}
+            {/* ★ 학생 풀이 QR — 켜면 첫 쪽 머리말 오른쪽 위에. 한글 출력에도 같이 (에디토리얼 헤더) */}
+            {examId && (
+              <button
+                type="button"
+                onClick={() => setShowQr((v) => !v)}
+                title="학생용: 첫 쪽 오른쪽 위에 QR 을 넣습니다. 학생이 찍으면 이 학습지 풀이·채점 화면이 열립니다. 선생님용은 끄세요"
+                className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                  showQr ? 'border-white/25 bg-white/10 text-content-primary' : 'border-zinc-700 text-content-tertiary hover:text-content-primary'
+                }`}
+              >
+                QR
+              </button>
+            )}
             {/* ★ 출처 — 켜면 문항 번호 줄 오른쪽에 원래 시험지·번호. 종류별로 골라 찍는다 (수학비서 「출처 노출」) */}
             <div className="inline-flex items-center gap-1">
               <button
@@ -1386,7 +1414,11 @@ export function ExamPaperView({
             {/* 헤더 — 첫 페이지만. 가운데 구분선(page-anchored)이 헤더 위로 지나가지 않도록
                 흰 배경 + z-index 로 선을 덮음. */}
             {pageIdx === 0 && (
-              <div style={{ marginBottom: '16px', position: 'relative', zIndex: 2, background: '#fff' }}>
+              <div style={{ marginBottom: '16px', position: 'relative', zIndex: 2, background: '#fff', paddingRight: qrDataUrl ? '84px' : undefined }}>
+                {qrDataUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={qrDataUrl} alt="풀이 QR" style={{ position: 'absolute', top: 0, right: 0, width: '72px', height: '72px' }} />
+                )}
                 <EditableExamHeader
                   templateId={templateId}
                   meta={examMeta}

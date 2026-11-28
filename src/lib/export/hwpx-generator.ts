@@ -56,6 +56,10 @@ export interface HwpxHeaderMeta {
   //   /mock(수능지 형식: 가운데 초대형 과목명 + 전폭 굵은선)
   //   /band(기출정복풍 "느낌" 구현: 회색 타이틀 밴드 + 좌측 컬러 포인트 블록 — 그대로 카피 X)
   headerStyle?: 'editorial' | 'classic' | 'boxed' | 'mock' | 'band';
+  // ★ 학생 풀이 QR (2026-11-28) — generateHWPX 가 config.qrPng 를 BinData 로 넣고 채운다(직접 넣지 말 것).
+  //   에디토리얼 헤더만 지원: 오른쪽에 QR 칸(전 행 병합)을 붙인다. 다른 헤더 구조는 무시.
+  qrBinId?: string;
+  qrPx?: number;
 }
 
 export interface HwpxExamConfig {
@@ -81,6 +85,8 @@ export interface HwpxExamConfig {
   // ★ 제본 여백(mm) — 한글 쪽 설정의 「제본」 여백. mirrorGutter=맞쪽(뒷면은 오른쪽). 0/없음=종전과 같음
   gutterMm?: number;
   mirrorGutter?: boolean;
+  // ★ 학생 풀이 QR 이미지(PNG 바이트). 있으면 에디토리얼 헤더 오른쪽에 넣는다 (선생님용은 넘기지 않음)
+  qrPng?: Uint8Array;
 }
 
 // ============================================================================
@@ -1296,15 +1302,15 @@ function edCell(
   runsXml: string,
   col: number,
   row: number,
-  opts: { span?: number; w: number; h: number; align?: 'left' | 'right'; line?: boolean; lineBf?: number; bf?: number },
+  opts: { span?: number; rowSpan?: number; w: number; h: number; align?: 'left' | 'right' | 'center'; line?: boolean; lineBf?: number; bf?: number },
 ): string {
   const bf = opts.bf ?? (opts.line ? (opts.lineBf ?? 10) : BF_NONE); // 기본 하단선=10, accent 는 28/30
-  const para = opts.align === 'right' ? PARA_RIGHT : PARA.body;
+  const para = opts.align === 'right' ? PARA_RIGHT : opts.align === 'center' ? PARA.eq : PARA.body;
   return `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="${bf}">`
     + `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">`
     + `<hp:p id="0" paraPrIDRef="${para}" styleIDRef="${STYLE}" pageBreak="0" columnBreak="0" merged="0">${runsXml}</hp:p>`
     + `</hp:subList>`
-    + `<hp:cellAddr colAddr="${col}" rowAddr="${row}"/><hp:cellSpan colSpan="${opts.span || 1}" rowSpan="1"/>`
+    + `<hp:cellAddr colAddr="${col}" rowAddr="${row}"/><hp:cellSpan colSpan="${opts.span || 1}" rowSpan="${opts.rowSpan || 1}"/>`
     + `<hp:cellSz width="${opts.w}" height="${opts.h}"/>`
     + `<hp:cellMargin left="0" right="0" top="0" bottom="0"/>`
     + `</hp:tc>`;
@@ -1321,36 +1327,75 @@ function editorialHeaderHeight(h: HwpxHeaderMeta, showNameField: boolean): numbe
 
 // inline=true(그리드 모드): treatAsChar=1 로 텍스트 흐름에 박음 — 플로팅 위치계산 배제(치우침 원천 차단).
 // inline=false(흐름 모드): 2단 colPr 위 전체폭 플로팅 (매쓰플랫 실측, 부흥중 검증).
+// ★ QR 칸 (2026-11-28) — 헤더 높이는 그대로 두고 오른쪽에 열 하나를 더한다(전 행 병합).
+//   행 높이를 늘리면 editorialHeaderHeight 동기화(함정 5)가 깨지므로 QR 크기를 행 높이 합에 맞춰 줄인다.
+function editorialQrSize(h: HwpxHeaderMeta, showNameField: boolean): number {
+  const contentH = ED_ROW_H.meta + ED_ROW_H.title + (h.grade ? ED_ROW_H.grade : 0) + (showNameField ? ED_ROW_H.name : 0);
+  return Math.min(5400, contentH - 400); // 최대 약 19mm
+}
+
+function qrPicRun(binId: string, px: number, size: number): string {
+  const org = Math.max(1, Math.round(px * 75));
+  const sc = (size / org).toFixed(6);
+  const id = nextId();
+  return `<hp:run charPrIDRef="${CHAR.body}">`
+    + `<hp:pic id="${id}" zOrder="0" numberingType="PICTURE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" href="" groupLevel="0" instid="${id}" reverse="0">`
+    + `<hp:offset x="0" y="0"/>`
+    + `<hp:orgSz width="${org}" height="${org}"/><hp:curSz width="${size}" height="${size}"/>`
+    + `<hp:flip horizontal="0" vertical="0"/>`
+    + `<hp:rotationInfo angle="0" centerX="${Math.round(size / 2)}" centerY="${Math.round(size / 2)}" rotateimage="1"/>`
+    + `<hp:renderingInfo><hc:transMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/><hc:scaMatrix e1="${sc}" e2="0" e3="0" e4="0" e5="${sc}" e6="0"/><hc:rotMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/></hp:renderingInfo>`
+    + `<hc:img binaryItemIDRef="${binId}" bright="0" contrast="0" effect="REAL_PIC" alpha="0"/>`
+    + `<hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="${org}" y="0"/><hc:pt2 x="${org}" y="${org}"/><hc:pt3 x="0" y="${org}"/></hp:imgRect>`
+    + `<hp:imgClip left="0" right="${org}" top="0" bottom="${org}"/>`
+    + `<hp:inMargin left="0" right="0" top="0" bottom="0"/>`
+    + `<hp:imgDim dimwidth="${org}" dimheight="${org}"/><hp:effects/>`
+    + `<hp:sz width="${size}" widthRelTo="ABSOLUTE" height="${size}" heightRelTo="ABSOLUTE" protect="0"/>`
+    + `<hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
+    + `<hp:outMargin left="0" right="0" top="0" bottom="0"/><hp:shapeComment/>`
+    + `</hp:pic></hp:run>`;
+}
+
 function buildEditorialHeader(h: HwpxHeaderMeta, showNameField: boolean, inline: boolean): string {
   const meta = [h.subject, h.examType].filter(Boolean).join(' · ');
   const deco = headerDeco(h);
+  // QR 열 — 있으면 왼쪽 두 열 폭을 그만큼 줄인다 (표 전체 폭 TABLE_W 는 그대로)
+  const qr = h.qrBinId && h.qrPx ? { bin: h.qrBinId, px: h.qrPx, size: editorialQrSize(h, showNameField) } : null;
+  const qrW = qr ? qr.size + 900 : 0;
+  const W = TABLE_W - qrW;      // 왼쪽 두 열 합
+  const LW = Math.floor(W / 2);
+  const RW = W - LW;
+  const cols = qr ? 3 : 2;
+  const contentRows = 2 + (h.grade ? 1 : 0) + (showNameField ? 1 : 0);
+  const contentH = ED_ROW_H.meta + ED_ROW_H.title + (h.grade ? ED_ROW_H.grade : 0) + (showNameField ? ED_ROW_H.name : 0);
   const rows: string[] = [];
   let r = 0;
   if (deco.band) {
     // 상단 색 띠 — 그래픽 테마(wave/ribbon 등) 근사, accent 배경 (한글 네이티브 디자인)
-    rows.push('<hp:tr>' + edCell(textRun('', CHAR.small), 0, r, { span: 2, w: TABLE_W, h: ED_ROW_H.band, bf: BF_ACCENT_BAND }) + '</hp:tr>');
+    rows.push('<hp:tr>' + edCell(textRun('', CHAR.small), 0, r, { span: cols, w: TABLE_W, h: ED_ROW_H.band, bf: BF_ACCENT_BAND }) + '</hp:tr>');
     r++;
   }
   rows.push('<hp:tr>'
-    + edCell(textRun(meta, CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.meta })
-    + edCell(textRun(h.schoolName || '', CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.meta, align: 'right' })
+    + edCell(textRun(meta, CHAR.meta), 0, r, { w: LW, h: ED_ROW_H.meta })
+    + edCell(textRun(h.schoolName || '', CHAR.meta), 1, r, { w: RW, h: ED_ROW_H.meta, align: 'right' })
+    + (qr ? edCell(qrPicRun(qr.bin, qr.px, qr.size), 2, r, { rowSpan: contentRows, w: qrW, h: contentH, align: 'center' }) : '')
     + '</hp:tr>');
   r++;
-  rows.push('<hp:tr>' + edCell(textRun(h.examTitle || '', CHAR.title), 0, r, { span: 2, w: TABLE_W, h: ED_ROW_H.title }) + '</hp:tr>');
+  rows.push('<hp:tr>' + edCell(textRun(h.examTitle || '', CHAR.title), 0, r, { span: 2, w: W, h: ED_ROW_H.title }) + '</hp:tr>');
   r++;
   if (h.grade) {
-    rows.push('<hp:tr>' + edCell(textRun(h.grade, CHAR.meta), 0, r, { span: 2, w: TABLE_W, h: ED_ROW_H.grade }) + '</hp:tr>');
+    rows.push('<hp:tr>' + edCell(textRun(h.grade, CHAR.meta), 0, r, { span: 2, w: W, h: ED_ROW_H.grade }) + '</hp:tr>');
     r++;
   }
   if (showNameField) {
     rows.push('<hp:tr>'
-      + edCell(textRun('이름 :                              ', CHAR.meta), 0, r, { w: HALF_W, h: ED_ROW_H.name, line: true, lineBf: deco.lineBf })
-      + edCell(textRun(`점수 :          / ${h.totalScore || '100'}`, CHAR.meta), 1, r, { w: TABLE_W - HALF_W, h: ED_ROW_H.name, line: true, lineBf: deco.lineBf, align: 'right' })
+      + edCell(textRun('이름 :                              ', CHAR.meta), 0, r, { w: LW, h: ED_ROW_H.name, line: true, lineBf: deco.lineBf })
+      + edCell(textRun(`점수 :          / ${h.totalScore || '100'}`, CHAR.meta), 1, r, { w: RW, h: ED_ROW_H.name, line: true, lineBf: deco.lineBf, align: 'right' })
       + '</hp:tr>');
     r++;
   }
   const totalH = editorialHeaderHeight(h, showNameField) - 500;
-  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${r}" colCnt="2" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
+  return `<hp:tbl id="${nextId()}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${r}" colCnt="${cols}" cellSpacing="0" borderFillIDRef="${BF_NONE}" noAdjust="0">`
     + `<hp:sz width="${TABLE_W}" widthRelTo="ABSOLUTE" height="${totalH}" heightRelTo="ABSOLUTE" protect="0"/>`
     + `<hp:pos treatAsChar="${inline ? 1 : 0}" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="PARA" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>`
     + `<hp:outMargin left="0" right="0" top="0" bottom="500"/>`
@@ -2194,6 +2239,13 @@ export async function generateHWPX(
       zip.file(`BinData/${meta.id}.${meta.ext}`, b);
       imageItems.push({ id: meta.id, ext: meta.ext, mime: meta.mime });
     }
+  }
+  // ★ 학생 풀이 QR — 에디토리얼 헤더(기본)일 때만. id 는 도형 image1..N 다음 번호
+  if (config.qrPng && config.header && (!config.header.headerStyle || config.header.headerStyle === 'editorial')) {
+    const qrId = `image${imageMap.size + 1}`;
+    zip.file(`BinData/${qrId}.png`, config.qrPng);
+    imageItems.push({ id: qrId, ext: 'png', mime: 'image/png' });
+    config = { ...config, header: { ...config.header, qrBinId: qrId, qrPx: imageSize(config.qrPng).w } };
   }
 
   zip.file('Contents/content.hpf', buildContentHpf(config, imageItems));
