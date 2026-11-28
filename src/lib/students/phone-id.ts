@@ -42,7 +42,63 @@ export function phoneToStudentEmail(rawPhone: string): string | null {
  */
 export function stripStudentDomain(email: string): string {
   if (!email) return '';
-  return email.replace(/@local\.suzag\.com$/i, '');
+  const local = email.replace(/@local\.suzag\.com$/i, '');
+  // 이름 아이디(EDG홍길동 등)는 u<hex> 로 저장 — 화면엔 원래 아이디로
+  if (local !== email && /^u[0-9a-f]+$/.test(local)) return decodeNameLoginId(local) ?? local;
+  return local;
+}
+
+// ============================================================================
+// ★ 이름 아이디 (2026-11-28 대표 「매쓰홀릭과 같게」 — 동부산과사람 = EDG+학생이름)
+//   Supabase Auth 이메일엔 한글을 못 넣으므로 아이디를 UTF-8 hex 로 바꿔 'u<hex>@local.suzag.com' 에 저장.
+//   대소문자·공백 차이로 다른 계정이 되지 않게 정규화(NFC · 공백 제거 · 영문 대문자) 후 변환한다.
+// ============================================================================
+
+const NAME_ID_MAX_BYTES = 28; // 'u' + 56 hex = 57자 < 이메일 로컬 64자
+
+/** 아이디 정규화 — 공백 제거, NFC, 영문 대문자 (EDG홍길동 = edg 홍길동) */
+export function normalizeLoginId(raw: string): string {
+  return (raw || '').normalize('NFC').replace(/\s+/g, '').toUpperCase();
+}
+
+function toHex(str: string): string {
+  return Array.from(new TextEncoder().encode(str)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function decodeNameLoginId(local: string): string | null {
+  try {
+    const hex = local.slice(1);
+    if (hex.length % 2) return null;
+    const bytes = new Uint8Array(hex.match(/../g)!.map((h) => parseInt(h, 16)));
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/** 이름 아이디로 쓸 수 있는 글자인가 — 한글·영문·숫자만, 2~ 자, 바이트 한도 안 */
+export function isValidNameLoginId(raw: string): boolean {
+  const id = normalizeLoginId(raw);
+  if (id.length < 2) return false;
+  if (!/^[A-Z0-9가-힣]+$/.test(id)) return false;
+  return new TextEncoder().encode(id).length <= NAME_ID_MAX_BYTES;
+}
+
+/** 이름 아이디 → 로그인 이메일. 쓸 수 없는 아이디면 null */
+export function nameLoginIdToEmail(raw: string): string | null {
+  if (!isValidNameLoginId(raw)) return null;
+  return `u${toHex(normalizeLoginId(raw))}${STUDENT_EMAIL_DOMAIN}`;
+}
+
+/**
+ * 학생 로그인 칸 입력 → 로그인 이메일.
+ *   이메일(@ 포함) → 그대로 / 전화번호(숫자·하이픈 9~11자리) → '<digits>@…' / 그 밖 → 이름 아이디
+ */
+export function studentLoginInputToEmail(raw: string): string {
+  const v = (raw || '').trim();
+  if (v.includes('@')) return v;
+  if (/^[0-9\-\s]+$/.test(v)) return phoneToStudentEmail(v) ?? v;
+  return nameLoginIdToEmail(v) ?? v;
 }
 
 /** 학생 ID 가 전화번호 기반(@local.suzag.com)인지 판별 */
