@@ -62,6 +62,11 @@ const CIRCLED = ['①', '②', '③', '④', '⑤'] as const;
 // ----------------------------------------------------------------------------
 function decideMode(answerJson: Record<string, unknown> | null): ItemMode {
   if (!answerJson) return { kind: 'manual', choiceCount: 0 };
+  // ★ 제출 전 학생에겐 정답이 안 온다 — 서버가 정한 입력 방식(input_mode)을 그대로 쓴다
+  if (typeof answerJson.input_mode === 'string') {
+    const m = answerJson.input_mode as ItemMode['kind'];
+    return { kind: m, choiceCount: m === 'objective' ? Number(answerJson.choice_count) || 5 : 0 };
+  }
   const choices = Array.isArray(answerJson.choices) ? (answerJson.choices as unknown[]) : [];
   const declaredType = (answerJson.type as string) || '';
   const correctRaw = String(answerJson.finalAnswer ?? answerJson.correct_answer ?? '').trim();

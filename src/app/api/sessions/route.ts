@@ -26,6 +26,7 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertExamAccess } from '@/lib/security/institute-guard';
 import { resolveActiveInstitute } from '@/lib/security/active-institute';
+import { createPrintSession, loadExamSnapshot, VALID_SESSION_TYPES, type SessionType } from '@/lib/sessions/create-session';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -255,8 +256,7 @@ export async function GET(request: NextRequest) {
 }
 
 // BS/DD/PT/SC = 진단 회차. WS/EX = 일반 출제(학습지/시험지) — 출제 공통 라인(Phase 1).
-type SessionType = 'BS' | 'DD' | 'PT' | 'SC' | 'WS' | 'EX';
-const VALID_TYPES: SessionType[] = ['BS', 'DD', 'PT', 'SC', 'WS', 'EX'];
+const VALID_TYPES = VALID_SESSION_TYPES;
 
 interface CreateBody {
   exam_id?: string;
@@ -329,95 +329,31 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2) exam_problems (sequence_number 순)
-  const { data: examProblems, error: epErr } = await sb
-    .from('exam_problems')
-    .select('problem_id, sequence_number')
-    .eq('exam_id', examId)
-    .order('sequence_number', { ascending: true });
-  if (epErr) {
-    return NextResponse.json({ error: epErr.message }, { status: 500 });
+  // 2) 문항 순서 + 분류 스냅샷 (학생 「과제 시작」과 같은 함수 — lib/sessions/create-session)
+  let snapshot;
+  try {
+    snapshot = await loadExamSnapshot(sb, examId);
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
-  if (!examProblems || examProblems.length === 0) {
+  if (snapshot.length === 0) {
     return NextResponse.json({ error: '시험지에 문제가 없습니다' }, { status: 400 });
   }
 
-  const problemIds = examProblems.map((ep: any) => ep.problem_id as string);
-
-  // 3) classifications — type_code / difficulty 스냅샷용
-  const { data: classData } = await sb
-    .from('classifications')
-    .select('problem_id, type_code, expanded_type_code, difficulty')
-    .in('problem_id', problemIds);
-  const classMap = new Map<string, { type_code: string; difficulty: number | null }>();
-  for (const c of (classData || []) as any[]) {
-    const tc = (c.type_code as string) || (c.expanded_type_code as string) || '';
-    let diff: number | null = null;
-    if (c.difficulty != null) {
-      const n = typeof c.difficulty === 'number' ? c.difficulty : parseInt(String(c.difficulty), 10);
-      if (!isNaN(n) && n >= 1 && n <= 10) diff = n;
-    }
-    classMap.set(c.problem_id as string, { type_code: tc, difficulty: diff });
-  }
-
-  // 4) 학생별 세션 생성
+  // 3) 학생별 세션 생성
   const created: Array<{ session_id: string; student_id: string; problem_count: number }> = [];
   const skipped: Array<{ student_id: string; reason: string }> = [];
 
   for (const studentId of studentIds) {
-    // 4-a) print_sessions INSERT (UNIQUE 제약 충돌 시 건너뜀)
-    const { data: insSession, error: insErr } = await sb
-      .schema('diagnostics' as never)
-      .from('print_sessions')
-      .insert({
-        student_id: studentId,
-        exam_id: examId,
-        round_number: roundNumber,
-        session_type: sessionType,
-        teacher_note: teacherNote,
-        issued_by: issuedBy,
-      })
-      .select('id')
-      .single();
-
-    if (insErr || !insSession) {
-      // UNIQUE 위반은 "이미 존재" 로 간주
-      if (insErr && /duplicate|unique/i.test(insErr.message)) {
-        skipped.push({ student_id: studentId, reason: '이미 같은 (학생, 시험지, 회차) 세션 존재' });
-      } else {
-        skipped.push({ student_id: studentId, reason: insErr?.message || 'INSERT 실패' });
-      }
-      continue;
-    }
-
-    const sessionId = insSession.id as string;
-
-    // 4-b) session_problems 벌크 INSERT
-    const rows = examProblems.map((ep: any) => {
-      const cls = classMap.get(ep.problem_id as string);
-      return {
-        session_id: sessionId,
-        problem_id: ep.problem_id as string,
-        sequence_number: ep.sequence_number as number,
-        type_code_snapshot: cls?.type_code || null,
-        difficulty_snapshot: cls?.difficulty ?? null,
-      };
+    const r = await createPrintSession(sb, {
+      examId, studentId, snapshot, roundNumber, sessionType, teacherNote, issuedBy,
     });
-
-    const { error: spErr } = await sb
-      .schema('diagnostics' as never)
-      .from('session_problems')
-      .insert(rows);
-
-    if (spErr) {
-      console.error(`[sessions] session_problems insert error for session ${sessionId}:`, spErr.message);
-      // 세션 롤백 (cascade 로 session_problems 도 정리)
-      await sb.schema('diagnostics' as never).from('print_sessions').delete().eq('id', sessionId);
-      skipped.push({ student_id: studentId, reason: `session_problems INSERT 실패: ${spErr.message}` });
-      continue;
+    if (r.ok) {
+      created.push({ session_id: r.sessionId, student_id: studentId, problem_count: r.problemCount });
+    } else {
+      if (!r.duplicate) console.error(`[sessions] 세션 생성 실패 (student ${studentId.slice(0, 8)}):`, r.reason);
+      skipped.push({ student_id: studentId, reason: r.duplicate ? '이미 같은 (학생, 시험지, 회차) 세션 존재' : r.reason });
     }
-
-    created.push({ session_id: sessionId, student_id: studentId, problem_count: rows.length });
   }
 
   return NextResponse.json({ created, skipped, exam: { id: exam.id, title: exam.title } });
