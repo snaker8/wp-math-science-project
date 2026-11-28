@@ -21,35 +21,31 @@
 // 반환:
 //   { saved, auto_correct, auto_wrong, needs_review: [{ seq, student_answer, correct }] }
 //
-// 인증:
-//   학생용 QR 진입 경로 — 본인 인증은 세션의 student_id 가 박혀 있으므로 별도 X.
-//   세션 ID 자체가 무작위 UUID → 추측 불가하면 충분히 안전.
+// 인증 (2026-11-27 보강):
+//   예전엔 「세션 UUID 는 추측 불가」라며 인증이 없었다. 이제 로그인 필수 —
+//   학생은 본인 세션만(승격 전 명단 id 포함), 선생님은 자기 학원 학생 세션만.
+//   채점·저장 본체는 lib/grading/save-student-answers (태블릿 풀이와 공용).
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
-import { compareAnswer, type GradeMode } from '@/lib/grading/compare-answer';
+import { requireAuthScope } from '@/lib/auth/guard';
+import { assertStudentAccess } from '@/lib/security/institute-guard';
+import { loadOwnSession } from '@/lib/student/own-session';
+import { saveStudentAnswers, type StudentAnswerInput } from '@/lib/grading/save-student-answers';
 
 export const dynamic = 'force-dynamic';
 
-interface StudentAnswerEntry {
-  sequence_number?: number;
-  student_answer?: string;
-}
-
 interface RequestBody {
   session_id?: string;
-  answers?: StudentAnswerEntry[];
-}
-
-interface ReviewItem {
-  seq: number;
-  student_answer: string;
-  correct: string;
-  mode: GradeMode;
+  answers?: StudentAnswerInput[];
 }
 
 export async function POST(request: NextRequest) {
+  const authed = await requireAuthScope();
+  if (!authed.ok) return authed.response;
+  const { user, scope } = authed.data;
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
   }
@@ -64,162 +60,37 @@ export async function POST(request: NextRequest) {
 
   const sessionId = body.session_id;
   const answers = Array.isArray(body.answers) ? body.answers : [];
-
   if (!sessionId) return NextResponse.json({ error: 'session_id required' }, { status: 400 });
   if (answers.length === 0) return NextResponse.json({ error: 'answers 배열 필요' }, { status: 400 });
 
-  // 세션 + 학생/시험지 snapshot
-  const { data: session, error: sErr } = await sb
-    .schema('diagnostics' as never)
-    .from('print_sessions')
-    .select('id, student_id, exam_id')
-    .eq('id', sessionId)
-    .single();
-  if (sErr || !session) {
-    return NextResponse.json({ error: '세션을 찾을 수 없습니다' }, { status: 404 });
-  }
-  const studentId = (session as { student_id?: string }).student_id || null;
-  const examId = (session as { exam_id?: string }).exam_id || null;
-
-  // session_problems → sequence_number ↔ problem_id
-  const { data: sp } = await sb
-    .schema('diagnostics' as never)
-    .from('session_problems')
-    .select('sequence_number, problem_id')
-    .eq('session_id', sessionId);
-
-  const seqToProblem = new Map<number, string>();
-  for (const r of (sp || []) as Array<{ sequence_number: number; problem_id: string }>) {
-    seqToProblem.set(r.sequence_number, r.problem_id);
-  }
-
-  // problems 일괄 조회 → answer_json
-  const problemIds = Array.from(new Set(Array.from(seqToProblem.values())));
-  const { data: problems } = problemIds.length > 0
-    ? await sb.from('problems').select('id, answer_json').in('id', problemIds)
-    : { data: [] as Array<{ id: string; answer_json: Record<string, unknown> | null }> };
-
-  const problemMap = new Map<string, Record<string, unknown> | null>();
-  for (const p of (problems || []) as Array<{ id: string; answer_json: Record<string, unknown> | null }>) {
-    problemMap.set(p.id, p.answer_json || null);
-  }
-
-  // 비교 + row 조립
-  const rows: Array<Record<string, unknown>> = [];
-  const needsReview: ReviewItem[] = [];
-  const errors: string[] = [];
-  let autoCorrect = 0;
-  let autoWrong = 0;
-
-  for (const a of answers) {
-    const seq = Number(a.sequence_number);
-    const studentAnswer = (a.student_answer ?? '').trim();
-    if (!Number.isInteger(seq) || seq <= 0) {
-      errors.push(`잘못된 sequence_number: ${a.sequence_number}`);
-      continue;
-    }
-    if (!studentAnswer) {
-      // 학생이 비워둔 문항 — 결과 row 자체 안 만듦 (강사가 /grade 에서 따로 처리)
-      continue;
-    }
-
-    const problemId = seqToProblem.get(seq);
-    if (!problemId) {
-      errors.push(`seq=${seq}: session_problems 에 없음`);
-      continue;
-    }
-
-    const outcome = compareAnswer(studentAnswer, problemMap.get(problemId) || null);
-
-    // 저장값 결정
-    let isCorrect: boolean;
-    let teacherNote: string;
-    if (outcome.isCorrect === null) {
-      // 자동채점 보류 — 일단 오답으로 박되 강사 확인용 메모 + needsReview 응답
-      isCorrect = false;
-      teacherNote = `[학생답: ${studentAnswer}] [자동채점 보류 · ${outcome.mode}]`;
-      needsReview.push({
-        seq,
-        student_answer: studentAnswer,
-        correct: outcome.normalizedCorrect,
-        mode: outcome.mode,
-      });
-    } else {
-      isCorrect = outcome.isCorrect;
-      if (isCorrect) autoCorrect += 1;
-      else autoWrong += 1;
-      teacherNote = `[학생답: ${outcome.normalizedStudent || studentAnswer}]`;
-    }
-
-    rows.push({
-      session_id: sessionId,
-      problem_id: problemId,
-      sequence_number: seq,
-      is_correct: isCorrect,
-      error_cause: null,
-      teacher_note: teacherNote,
-      graded_at: new Date().toISOString(),
-    });
-  }
-
-  if (rows.length === 0) {
-    return NextResponse.json(
-      { saved: 0, auto_correct: 0, auto_wrong: 0, needs_review: needsReview, errors },
-      { status: errors.length > 0 ? 400 : 200 },
-    );
-  }
-
-  const { error: upErr, count } = await sb
-    .schema('diagnostics' as never)
-    .from('session_results')
-    .upsert(rows, { onConflict: 'session_id,sequence_number', count: 'exact' });
-
-  if (upErr) {
-    console.error('[session-results/from-student] upsert error:', upErr.message);
-    return NextResponse.json({ error: upErr.message }, { status: 500 });
-  }
-
-  // Phase C-2: 오답 problem_pitfalls 매칭 → student_pitfall_history INSERT
-  // (POST /api/session-results 와 동일한 패턴 — 학생 함정 누적 base)
-  if (studentId) {
-    try {
-      const wrongProblemIds = rows
-        .filter((r) => r.is_correct === false)
-        .map((r) => r.problem_id as string);
-
-      if (wrongProblemIds.length > 0) {
-        const { data: pitfallRows } = await sb
-          .from('problem_pitfalls')
-          .select('problem_id, pitfall_code')
-          .in('problem_id', wrongProblemIds);
-
-        if (pitfallRows && pitfallRows.length > 0) {
-          const historyRows = (pitfallRows as Array<{ problem_id: string; pitfall_code: string }>).map((p) => ({
-            student_id: studentId,
-            pitfall_code: p.pitfall_code,
-            problem_id: p.problem_id,
-            session_id: sessionId,
-            exam_id: examId,
-          }));
-          const { error: histErr } = await sb
-            .schema('diagnostics' as never)
-            .from('student_pitfall_history')
-            .insert(historyRows);
-          if (histErr) {
-            console.warn('[from-student] pitfall_history insert 실패:', histErr.message);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[from-student] pitfall_history 예외:', e);
+  let session: { id: string; student_id: string | null; exam_id: string | null };
+  if (user.role === 'STUDENT') {
+    const own = await loadOwnSession(sb, user.id, sessionId);
+    if (!own.ok) return NextResponse.json({ error: own.error }, { status: own.status });
+    session = own.session;
+  } else {
+    const { data, error: sErr } = await sb
+      .schema('diagnostics' as never)
+      .from('print_sessions')
+      .select('id, student_id, exam_id')
+      .eq('id', sessionId)
+      .single();
+    if (sErr || !data) return NextResponse.json({ error: '세션을 찾을 수 없습니다' }, { status: 404 });
+    session = data as { id: string; student_id: string | null; exam_id: string | null };
+    if (session.student_id) {
+      const g = await assertStudentAccess(sb, session.student_id, scope);
+      if (!g.ok) return NextResponse.json({ error: '접근 권한이 없습니다' }, { status: g.status });
     }
   }
 
-  return NextResponse.json({
-    saved: count ?? rows.length,
-    auto_correct: autoCorrect,
-    auto_wrong: autoWrong,
-    needs_review: needsReview,
-    errors,
-  });
+  const r = await saveStudentAnswers(sb, session, answers);
+  if (!r.ok) {
+    console.error('[session-results/from-student] 저장 실패:', r.error);
+    return NextResponse.json({ error: r.error }, { status: r.status });
+  }
+  const { saved, auto_correct, auto_wrong, needs_review, errors } = r.result;
+  return NextResponse.json(
+    { saved, auto_correct, auto_wrong, needs_review, errors },
+    { status: saved === 0 && errors.length > 0 ? 400 : 200 },
+  );
 }

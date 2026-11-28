@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, ClipboardList, User } from 'lucide-react';
+import { Home, ClipboardList, User, PencilLine } from 'lucide-react';
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -11,6 +11,8 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
   // 실제 동작하는 기능만 탭에 노출 (목업 페이지 링크 제거 — P0)
   const navItems = [
     { id: 'home', label: '홈', icon: Home, href: '/student/dashboard' },
+    // 2026-11-27 대표 「출제해 학생에게 배포하면 태블릿이나 노트북에서 풀고 답 입력」
+    { id: 'assignments', label: '과제', icon: PencilLine, href: '/student/assignments' },
     { id: 'exams', label: '시험', icon: ClipboardList, href: '/student/exams' },
     { id: 'profile', label: '내 정보', icon: User, href: '/student/profile' },
   ];
@@ -23,6 +25,26 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       {/* Mobile Header (Optional, mostly for branding) */}
       <header className="bg-white border-b border-gray-100 p-4 flex items-center justify-between sticky top-0 z-10">
         <h1 className="text-base font-bold tracking-tight text-indigo-600">Math×Sci Bank</h1>
+        {/* 태블릿·노트북(md 이상) — 아래 탭바가 없으니 위에 메뉴 */}
+        {!isSolving && (
+          <nav className="hidden md:flex items-center gap-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    isActive ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                  }`}
+                >
+                  <item.icon size={17} strokeWidth={isActive ? 2.5 : 2} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
         <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
           <User size={18} />
         </div>

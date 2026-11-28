@@ -12,6 +12,9 @@ import { supabaseAdmin } from '@/lib/supabase/server';
 import { requireAuthScope } from '@/lib/auth/guard';
 import { assertInstituteAccess } from '@/lib/security/institute-guard';
 
+import { resolveStudentIdentity } from '@/lib/diagnostics/find-session';
+import { studentSafeAnswerJson } from '@/lib/student/answer-safe';
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(
@@ -45,8 +48,11 @@ export async function GET(
 
   // ★ 권한 검증
   const sessionStudentId = (session as { student_id: string }).student_id;
-  if (user.role === 'STUDENT') {
-    if (sessionStudentId !== user.id) {
+  const isStudent = user.role === 'STUDENT';
+  if (isStudent) {
+    // 승격 전 명단 id 로 만든 세션도 본인 것 (신원 병합)
+    const myIds = await resolveStudentIdentity(sb, user.id);
+    if (!myIds.includes(sessionStudentId)) {
       return NextResponse.json({ error: 'Forbidden — 다른 학생 세션' }, { status: 403 });
     }
   } else {
@@ -111,6 +117,8 @@ export async function GET(
   const resultMap = new Map<number, any>();
   for (const r of (results || []) as any[]) resultMap.set(r.sequence_number as number, r);
 
+  const hideKey = isStudent && !(session as { completed_at?: string | null }).completed_at;
+
   // 문항+결과 병합
   const items = ((sp || []) as any[]).map(row => {
     const p = problemMap.get(row.problem_id as string);
@@ -121,8 +129,9 @@ export async function GET(
       type_code: row.type_code_snapshot,
       difficulty: row.difficulty_snapshot,
       content: p?.content_latex || '',
-      solution: p?.solution_latex || '',
-      answer_json: p?.answer_json || null,
+      // ★ 제출(채점 완료) 전 학생에게는 정답·해설을 보내지 않는다 — 입력 방식만
+      solution: hideKey ? '' : (p?.solution_latex || ''),
+      answer_json: hideKey ? studentSafeAnswerJson(p?.answer_json) : (p?.answer_json || null),
       images: p?.images || [],
       result: r ? {
         is_correct: r.is_correct,
